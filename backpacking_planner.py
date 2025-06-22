@@ -589,16 +589,6 @@ def show_detailed_statistics():
         avg_daily = (total_transport + total_accommodation) / len(st.session_state.trip_data) if st.session_state.trip_data else 0
         st.metric("📊 Avg Daily Cost", f"£{avg_daily:.2f}")
 
-if __name__ == "__main__":
-    main()Days Planned", total_days)
-    with col2:
-        st.metric("Total Cost", f"£{total_cost:.2f}")
-    with col3:
-        st.metric("Budget Remaining", f"£{remaining:.2f}", 
-                 delta=f"{100-percentage_used:.1f}% left")
-    with col4:
-        avg_daily = total_cost / total_days if total_days > 0 else 0
-        st.metric("Avg Daily Cost", f"£{avg_daily:.2f}")
 
 def trip_overview():
     """Trip overview and basic information"""
