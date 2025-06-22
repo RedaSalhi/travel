@@ -203,4 +203,236 @@ def validate_day_data(day_data: Dict[str, Any]) -> List[str]:
     return issues
 
 
-def generate_trip_insights(trip_data: List[Dict[
+def generate_trip_insights(trip_data: List[Dict[str, Any]], budget_data: Dict[str, Any]) -> List[str]:
+    """
+    Generate insights and recommendations for the trip
+    
+    Args:
+        trip_data: List of day data dictionaries
+        budget_data: Budget information dictionary
+        
+    Returns:
+        List of insight strings
+    """
+    insights = []
+    
+    if not trip_data:
+        return ["Start planning your trip to get personalized insights!"]
+    
+    stats = calculate_trip_statistics(trip_data)
+    
+    # Budget insights
+    total_budget = budget_data.get('total_budget', 0)
+    if total_budget > 0:
+        budget_usage = (stats['total_cost'] / total_budget) * 100
+        
+        if budget_usage > 100:
+            insights.append(f"⚠️ You're {budget_usage-100:.1f}% over budget. Consider reducing costs.")
+        elif budget_usage > 80:
+            insights.append(f"🔶 You're using {budget_usage:.1f}% of your budget. Budget carefully for remaining items.")
+        else:
+            insights.append(f"✅ Great! You're using {budget_usage:.1f}% of your budget with room for extras.")
+    
+    # Transport insights
+    if stats['transport_counts']:
+        most_used_transport = max(stats['transport_counts'], key=stats['transport_counts'].get)
+        insights.append(f"🚌 You're mainly using {most_used_transport} for transport ({stats['transport_counts'][most_used_transport]} times).")
+        
+        if 'Bus (overnight)' in stats['transport_counts'] or 'Train (overnight)' in stats['transport_counts']:
+            overnight_count = stats['transport_counts'].get('Bus (overnight)', 0) + stats['transport_counts'].get('Train (overnight)', 0)
+            savings = overnight_count * 25  # Estimated accommodation savings
+            insights.append(f"💡 Smart choice! Overnight transport saves you approximately £{savings} on accommodation.")
+    
+    # Accommodation insights
+    if stats['accommodation_counts']:
+        if stats['accommodation_counts'].get('Hostel', 0) > stats['total_days'] * 0.7:
+            insights.append("🏠 You're staying mostly in hostels - great for meeting other travelers!")
+        
+        camping_nights = stats['accommodation_counts'].get('Camping', 0)
+        if camping_nights > 0:
+            savings = camping_nights * 30  # Estimated savings vs hotels
+            insights.append(f"⛺ Camping {camping_nights} nights could save you around £{savings}!")
+    
+    # Cost insights
+    if stats['average_daily_cost'] > 0:
+        if stats['average_daily_cost'] < 30:
+            insights.append(f"💰 Your daily average of £{stats['average_daily_cost']:.0f} is very budget-friendly!")
+        elif stats['average_daily_cost'] < 50:
+            insights.append(f"💰 Your daily average of £{stats['average_daily_cost']:.0f} is reasonable for backpacking.")
+        else:
+            insights.append(f"💰 Your daily average of £{stats['average_daily_cost']:.0f} is on the higher side - consider budget alternatives.")
+    
+    # Completion insights
+    if stats['completion_rate'] < 0.5:
+        insights.append(f"📝 Your trip is {stats['completion_rate']:.1%} complete. Keep adding details for better planning!")
+    elif stats['completion_rate'] < 0.8:
+        insights.append(f"📝 Your trip is {stats['completion_rate']:.1%} complete. You're making good progress!")
+    else:
+        insights.append(f"📝 Your trip is {stats['completion_rate']:.1%} complete. Almost ready for adventure!")
+    
+    # Duration insights
+    if stats['total_days'] > 0:
+        if stats['total_days'] < 7:
+            insights.append("⏰ A short but sweet adventure! Perfect for a quick getaway.")
+        elif stats['total_days'] < 14:
+            insights.append("⏰ Two weeks of adventure - ideal for exploring a region thoroughly!")
+        elif stats['total_days'] < 30:
+            insights.append("⏰ A month-long journey - plenty of time for deep exploration!")
+        else:
+            insights.append("⏰ An epic long-term adventure! Don't forget to pace yourself.")
+    
+    return insights
+
+
+def export_to_dataframe(trip_data: List[Dict[str, Any]]) -> pd.DataFrame:
+    """
+    Convert trip data to pandas DataFrame for analysis
+    
+    Args:
+        trip_data: List of day data dictionaries
+        
+    Returns:
+        Pandas DataFrame with trip data
+    """
+    if not trip_data:
+        return pd.DataFrame()
+    
+    df = pd.DataFrame(trip_data)
+    
+    # Ensure numeric columns
+    df['transport_cost'] = pd.to_numeric(df['transport_cost'], errors='coerce').fillna(0)
+    df['accommodation_cost'] = pd.to_numeric(df['accommodation_cost'], errors='coerce').fillna(0)
+    
+    # Add calculated columns
+    df['total_daily_cost'] = df['transport_cost'] + df['accommodation_cost']
+    df['cumulative_cost'] = df['total_daily_cost'].cumsum()
+    
+    # Add completion percentage
+    df['completion_percentage'] = df.apply(lambda row: calculate_day_completion(row.to_dict()), axis=1)
+    
+    # Convert date column
+    df['date'] = pd.to_datetime(df['date'], errors='coerce')
+    
+    return df
+
+
+def get_budget_recommendations(trip_data: List[Dict[str, Any]], budget_data: Dict[str, Any]) -> List[str]:
+    """
+    Generate budget recommendations based on current planning
+    
+    Args:
+        trip_data: List of day data dictionaries
+        budget_data: Budget information dictionary
+        
+    Returns:
+        List of budget recommendation strings
+    """
+    recommendations = []
+    
+    if not trip_data:
+        return ["Plan your itinerary first to get budget recommendations!"]
+    
+    stats = calculate_trip_statistics(trip_data)
+    total_budget = budget_data.get('total_budget', 0)
+    
+    if total_budget <= 0:
+        recommendations.append("💰 Set a total budget to get personalized recommendations!")
+        return recommendations
+    
+    current_spending = stats['total_cost']
+    remaining_budget = total_budget - current_spending
+    
+    # Basic budget status
+    if remaining_budget < 0:
+        recommendations.append(f"⚠️ Over budget by £{abs(remaining_budget):.2f}. Consider these cost-cutting measures:")
+        recommendations.append("• Switch to overnight transport to save on accommodation")
+        recommendations.append("• Choose hostels over hotels")
+        recommendations.append("• Look for free walking tours and activities")
+        recommendations.append("• Cook your own meals when possible")
+    
+    # Category-specific recommendations
+    if stats['total_transport_cost'] > total_budget * 0.4:
+        recommendations.append("🚌 Transport costs are high (>40% of budget). Consider:")
+        recommendations.append("• Booking buses instead of flights")
+        recommendations.append("• Using rail passes for multiple train journeys")
+        recommendations.append("• Choosing overnight journeys")
+    
+    if stats['total_accommodation_cost'] > total_budget * 0.4:
+        recommendations.append("🏨 Accommodation costs are high (>40% of budget). Consider:")
+        recommendations.append("• Staying in hostels with shared rooms")
+        recommendations.append("• Trying Couchsurfing or house-sitting")
+        recommendations.append("• Camping where possible")
+        recommendations.append("• Looking for work exchanges")
+    
+    # Emergency fund recommendations
+    if not budget_data.get('emergency_budget', 0):
+        emergency_amount = total_budget * 0.1
+        recommendations.append(f"🛡️ Consider setting aside £{emergency_amount:.2f} (10% of budget) for emergencies")
+    
+    # Daily spending recommendations
+    remaining_days = len([day for day in trip_data if not day.get('accommodation_cost')])
+    if remaining_days > 0 and remaining_budget > 0:
+        suggested_daily = remaining_budget / remaining_days
+        recommendations.append(f"📅 For remaining {remaining_days} days, budget approximately £{suggested_daily:.2f} per day")
+    
+    return recommendations
+
+
+def save_trip_info(trip_info: Dict[str, Any]) -> bool:
+    """
+    Save trip information (placeholder for future database integration)
+    
+    Args:
+        trip_info: Trip information dictionary
+        
+    Returns:
+        Success status
+    """
+    # This would integrate with a database in a full application
+    # For now, it's just stored in session state
+    return True
+
+
+def load_trip_info() -> Dict[str, Any]:
+    """
+    Load trip information (placeholder for future database integration)
+    
+    Returns:
+        Trip information dictionary
+    """
+    # This would load from a database in a full application
+    # For now, return empty dict
+    return {}
+
+
+def validate_trip_dates(start_date: str, end_date: str) -> List[str]:
+    """
+    Validate trip dates
+    
+    Args:
+        start_date: Start date string
+        end_date: End date string
+        
+    Returns:
+        List of validation errors
+    """
+    errors = []
+    
+    try:
+        start = pd.to_datetime(start_date)
+        end = pd.to_datetime(end_date)
+        
+        if start >= end:
+            errors.append("End date must be after start date")
+        
+        if start < pd.Timestamp.now().date():
+            errors.append("Start date should not be in the past")
+        
+        trip_length = (end - start).days
+        if trip_length > 365:
+            errors.append("Trip length cannot exceed 365 days")
+        
+    except Exception as e:
+        errors.append("Invalid date format")
+    
+    return errors
