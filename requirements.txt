@@ -1,31 +1,8 @@
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-sqlalchemy==2.0.23
-pydantic==2.5.0
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
-python-multipart==0.0.6
-python-dotenv==1.0.0
-PyJWT==2.8.0
+datetime
 streamlit>=1.28.0
 pandas>=2.0.0
 plotly>=5.15.0
-
-json
-sqlite3
-hashlib
-os
-datetime
-pathlib
-
 numpy>=1.24.0
 
 
 python-dateutil>=2.8.0
-
-# Optional: For enhanced features
-# Uncomment if you want to add these features:
-# requests>=2.31.0          # For API integrations
-# folium>=0.14.0           # For map visualizations  
-# Pillow>=10.0.0           # For image processing
-# openpyxl>=3.1.0          # For Excel export support
