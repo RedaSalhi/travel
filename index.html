@@ -193,7 +193,7 @@
 
         .day-header {
             display: flex;
-            justify-content: between;
+            justify-content: space-between;
             align-items: center;
             margin-bottom: 1rem;
         }
@@ -292,6 +292,46 @@
             transition: width 0.3s ease;
         }
 
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            max-width: 90%;
+            max-height: 90%;
+            overflow: auto;
+            position: relative;
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            font-size: 1.5rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
         @media (max-width: 768px) {
             .header h1 {
                 font-size: 2rem;
@@ -307,6 +347,12 @@
             
             .tab {
                 text-align: center;
+            }
+            
+            .modal-content {
+                max-width: 95%;
+                max-height: 95%;
+                padding: 1rem;
             }
         }
     </style>
@@ -395,9 +441,9 @@
                         <div class="form-group">
                             <label for="travelStyle">✈️ Travel Style</label>
                             <select id="travelStyle">
-                                <option>🎒 Budget Backpacker (£25-40/day)</option>
-                                <option>🌟 Mid-range Explorer (£40-70/day)</option>
-                                <option>💎 Comfort Traveller (£70+/day)</option>
+                                <option value="🎒 Budget Backpacker (£25-40/day)">🎒 Budget Backpacker (£25-40/day)</option>
+                                <option value="🌟 Mid-range Explorer (£40-70/day)">🌟 Mid-range Explorer (£40-70/day)</option>
+                                <option value="💎 Comfort Traveller (£70+/day)">💎 Comfort Traveller (£70+/day)</option>
                             </select>
                         </div>
                     </div>
@@ -413,11 +459,11 @@
                         <div class="form-group">
                             <label for="transportPref">🚌 Preferred Transport</label>
                             <select id="transportPref">
-                                <option>🚌 Bus</option>
-                                <option>🚂 Train</option>
-                                <option>🔄 Mix of Both</option>
-                                <option>✈️ Airlines</option>
-                                <option>🚗 Car Rental</option>
+                                <option value="🚌 Bus">🚌 Bus</option>
+                                <option value="🚂 Train">🚂 Train</option>
+                                <option value="🔄 Mix of Both">🔄 Mix of Both</option>
+                                <option value="✈️ Airlines">✈️ Airlines</option>
+                                <option value="🚗 Car Rental">🚗 Car Rental</option>
                             </select>
                         </div>
                     </div>
@@ -426,11 +472,11 @@
                         <div class="form-group">
                             <label for="accommodationPref">🏨 Accommodation Style</label>
                             <select id="accommodationPref">
-                                <option>🏠 Hostels</option>
-                                <option>🏨 Hotels</option>
-                                <option>🏡 Mix of Both</option>
-                                <option>⛺ Camping</option>
-                                <option>🏘️ Local Stays</option>
+                                <option value="🏠 Hostels">🏠 Hostels</option>
+                                <option value="🏨 Hotels">🏨 Hotels</option>
+                                <option value="🏡 Mix of Both">🏡 Mix of Both</option>
+                                <option value="⛺ Camping">⛺ Camping</option>
+                                <option value="🏘️ Local Stays">🏘️ Local Stays</option>
                             </select>
                         </div>
                     </div>
@@ -593,12 +639,12 @@
                     if (tripInfo.accommodationPref) document.getElementById('accommodationPref').value = tripInfo.accommodationPref;
                     
                     // Populate budget fields
-                    if (budgetData.foodBudget) document.getElementById('foodBudget').value = budgetData.foodBudget;
-                    if (budgetData.activitiesBudget) document.getElementById('activitiesBudget').value = budgetData.activitiesBudget;
-                    if (budgetData.shoppingBudget) document.getElementById('shoppingBudget').value = budgetData.shoppingBudget;
-                    if (budgetData.miscBudget) document.getElementById('miscBudget').value = budgetData.miscBudget;
-                    if (budgetData.emergencyBudget) document.getElementById('emergencyBudget').value = budgetData.emergencyBudget;
-                    if (budgetData.insuranceBudget) document.getElementById('insuranceBudget').value = budgetData.insuranceBudget;
+                    document.getElementById('foodBudget').value = budgetData.foodBudget || 0;
+                    document.getElementById('activitiesBudget').value = budgetData.activitiesBudget || 0;
+                    document.getElementById('shoppingBudget').value = budgetData.shoppingBudget || 0;
+                    document.getElementById('miscBudget').value = budgetData.miscBudget || 0;
+                    document.getElementById('emergencyBudget').value = budgetData.emergencyBudget || 0;
+                    document.getElementById('insuranceBudget').value = budgetData.insuranceBudget || 0;
                     
                     showAlert('✅ Previous trip data loaded from your computer!', 'success');
                 } catch (e) {
@@ -767,6 +813,7 @@
                 tripData[index][field] = value;
                 saveToLocalStorage();
                 updateUI();
+                updateDaysList(); // Refresh the display to show updated values
             }
         }
 
@@ -809,44 +856,46 @@
                             <div class="col">
                                 <div class="transport-section">
                                     <h4>🚌 Transportation</h4>
+                                    <div class="form-group">
+                                        <label>Type</label>
+                                        <select onchange="updateDayData(${index}, 'transportType', this.value)">
+                                            <option value="Bus" ${day.transportType === 'Bus' ? 'selected' : ''}>🚌 Bus</option>
+                                            <option value="Train" ${day.transportType === 'Train' ? 'selected' : ''}>🚂 Train</option>
+                                            <option value="Plane" ${day.transportType === 'Plane' ? 'selected' : ''}>✈️ Plane</option>
+                                            <option value="Ferry" ${day.transportType === 'Ferry' ? 'selected' : ''}>⛴️ Ferry</option>
+                                            <option value="Car/Taxi" ${day.transportType === 'Car/Taxi' ? 'selected' : ''}>🚗 Car/Taxi</option>
+                                            <option value="Walking" ${day.transportType === 'Walking' ? 'selected' : ''}>🚶 Walking</option>
+                                            <option value="Local Transport" ${day.transportType === 'Local Transport' ? 'selected' : ''}>🚊 Local Transport</option>
+                                            <option value="Cycling" ${day.transportType === 'Cycling' ? 'selected' : ''}>🚴 Cycling</option>
+                                        </select>
+                                    </div>
                                     <div class="row">
-                                        <div class="col">
-                                            <div class="form-group">
-                                                <label>Type</label>
-                                                <select value="${day.transportType || 'Bus'}" onchange="updateDayData(${index}, 'transportType', this.value)">
-                                                    <option value="Bus">Bus</option>
-                                                    <option value="Train">Train</option>
-                                                    <option value="Plane">Plane</option>
-                                                    <option value="Ferry">Ferry</option>
-                                                    <option value="Car/Taxi">Car/Taxi</option>
-                                                    <option value="Walking">Walking</option>
-                                                </select>
-                                            </div>
-                                        </div>
                                         <div class="col">
                                             <div class="form-group">
                                                 <label>From</label>
                                                 <input type="text" value="${day.transportFrom || ''}" placeholder="Departure" onchange="updateDayData(${index}, 'transportFrom', this.value)">
                                             </div>
                                         </div>
-                                    </div>
-                                    <div class="row">
                                         <div class="col">
                                             <div class="form-group">
                                                 <label>To</label>
                                                 <input type="text" value="${day.transportTo || ''}" placeholder="Arrival" onchange="updateDayData(${index}, 'transportTo', this.value)">
                                             </div>
                                         </div>
+                                    </div>
+                                    <div class="row">
                                         <div class="col">
                                             <div class="form-group">
                                                 <label>Time</label>
                                                 <input type="text" value="${day.transportTime || ''}" placeholder="09:30" onchange="updateDayData(${index}, 'transportTime', this.value)">
                                             </div>
                                         </div>
-                                    </div>
-                                    <div class="form-group">
-                                        <label>Cost (£)</label>
-                                        <input type="number" value="${day.transportCost || 0}" min="0" step="1" onchange="updateDayData(${index}, 'transportCost', parseFloat(this.value) || 0)">
+                                        <div class="col">
+                                            <div class="form-group">
+                                                <label>Cost (£)</label>
+                                                <input type="number" value="${day.transportCost || 0}" min="0" step="1" onchange="updateDayData(${index}, 'transportCost', parseFloat(this.value) || 0)">
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -856,13 +905,17 @@
                                     <h4>🏨 Accommodation</h4>
                                     <div class="form-group">
                                         <label>Type</label>
-                                        <select value="${day.accommodationType || 'Hostel'}" onchange="updateDayData(${index}, 'accommodationType', this.value)">
-                                            <option value="Hostel">Hostel</option>
-                                            <option value="Hotel">Hotel</option>
-                                            <option value="Guesthouse">Guesthouse</option>
-                                            <option value="Camping">Camping</option>
-                                            <option value="Airbnb">Airbnb</option>
-                                            <option value="None">None</option>
+                                        <select onchange="updateDayData(${index}, 'accommodationType', this.value)">
+                                            <option value="Hostel" ${day.accommodationType === 'Hostel' ? 'selected' : ''}>🏠 Hostel</option>
+                                            <option value="Hotel" ${day.accommodationType === 'Hotel' ? 'selected' : ''}>🏨 Hotel</option>
+                                            <option value="Guesthouse" ${day.accommodationType === 'Guesthouse' ? 'selected' : ''}>🏡 Guesthouse</option>
+                                            <option value="Camping" ${day.accommodationType === 'Camping' ? 'selected' : ''}>⛺ Camping</option>
+                                            <option value="Bus (sleeping)" ${day.accommodationType === 'Bus (sleeping)' ? 'selected' : ''}>🚌 Bus (sleeping)</option>
+                                            <option value="Train (sleeping)" ${day.accommodationType === 'Train (sleeping)' ? 'selected' : ''}>🚂 Train (sleeping)</option>
+                                            <option value="Airbnb" ${day.accommodationType === 'Airbnb' ? 'selected' : ''}>🏠 Airbnb</option>
+                                            <option value="Couchsurfing" ${day.accommodationType === 'Couchsurfing' ? 'selected' : ''}>🛋️ Couchsurfing</option>
+                                            <option value="Friend's place" ${day.accommodationType === "Friend's place" ? 'selected' : ''}>👥 Friend's place</option>
+                                            <option value="None (transit day)" ${day.accommodationType === 'None (transit day)' ? 'selected' : ''}>🚶 None (transit day)</option>
                                         </select>
                                     </div>
                                     <div class="form-group">
@@ -879,7 +932,7 @@
                         
                         <div class="form-group">
                             <label>📝 Notes & Activities</label>
-                            <textarea rows="3" value="${day.notes || ''}" placeholder="Things to do, places to visit..." onchange="updateDayData(${index}, 'notes', this.value)">${day.notes || ''}</textarea>
+                            <textarea rows="3" placeholder="Things to do, places to visit..." onchange="updateDayData(${index}, 'notes', this.value)">${day.notes || ''}</textarea>
                         </div>
                         
                         <div class="row" style="align-items: center;">
@@ -903,10 +956,10 @@
             const requiredFields = ['location', 'transportFrom', 'transportTo', 'accommodationType'];
             const optionalFields = ['date', 'transportTime', 'accommodationName', 'notes'];
             
-            const requiredCompleted = requiredFields.filter(field => day[field]).length;
+            const requiredCompleted = requiredFields.filter(field => day[field] && day[field].trim() !== '').length;
             const requiredScore = (requiredCompleted / requiredFields.length) * 0.7;
             
-            const optionalCompleted = optionalFields.filter(field => day[field]).length;
+            const optionalCompleted = optionalFields.filter(field => day[field] && day[field].trim() !== '').length;
             const optionalScore = (optionalCompleted / optionalFields.length) * 0.3;
             
             return requiredScore + optionalScore;
@@ -964,8 +1017,8 @@
 
             const completedDays = tripData.filter(day => calculateDayCompletion(day) >= 0.8).length;
             const completionRate = completedDays / tripData.length;
-            const missingLocations = tripData.filter(day => !day.location).length;
-            const missingTransport = tripData.filter(day => !day.transportFrom).length;
+            const missingLocations = tripData.filter(day => !day.location || day.location.trim() === '').length;
+            const missingTransport = tripData.filter(day => !day.transportFrom || day.transportFrom.trim() === '').length;
 
             // Transport stats
             const transportStats = {};
@@ -1020,13 +1073,30 @@
                         ).join('')}
                     </div>
                 </div>
+                
+                <div style="margin-top: 2rem;">
+                    <h3>💰 Daily Cost Breakdown</h3>
+                    <div class="row">
+                        ${tripData.map(day => {
+                            const cost = (day.transportCost || 0) + (day.accommodationCost || 0);
+                            return `
+                                <div class="col" style="min-width: 150px; margin-bottom: 1rem;">
+                                    <div class="stat-card">
+                                        <div class="stat-value" style="font-size: 1.2rem;">£${cost.toFixed(0)}</div>
+                                        <div class="stat-label">Day ${day.day}</div>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
             `;
         }
 
         function getTransportEmoji(type) {
             const emojis = {
                 'Bus': '🚌', 'Train': '🚂', 'Plane': '✈️', 'Ferry': '⛴️', 
-                'Car/Taxi': '🚗', 'Walking': '🚶'
+                'Car/Taxi': '🚗', 'Walking': '🚶', 'Local Transport': '🚊', 'Cycling': '🚴'
             };
             return emojis[type] || '🚌';
         }
@@ -1034,7 +1104,8 @@
         function getAccommodationEmoji(type) {
             const emojis = {
                 'Hostel': '🏠', 'Hotel': '🏨', 'Guesthouse': '🏡', 'Camping': '⛺',
-                'Airbnb': '🏠', 'None': '🚶'
+                'Bus (sleeping)': '🚌', 'Train (sleeping)': '🚂', 'Airbnb': '🏠',
+                'Couchsurfing': '🛋️', "Friend's place": '👥', 'None (transit day)': '🚶'
             };
             return emojis[type] || '🏠';
         }
@@ -1074,9 +1145,9 @@
                                 </div>
                                 <div class="col">
                                     <strong>🏨 Accommodation:</strong><br>
-                                    ${day.accommodationType && day.accommodationType !== 'None' ? 
+                                    ${day.accommodationType && day.accommodationType !== 'None (transit day)' ? 
                                         `• ${day.accommodationType}<br>${day.accommodationName ? '• ' + day.accommodationName + '<br>' : ''}• £${(day.accommodationCost || 0).toFixed(2)}` 
-                                        : '• No accommodation'}
+                                        : '• No accommodation needed'}
                                 </div>
                             </div>
                             ${day.notes ? `<p><strong>📝 Notes:</strong> ${day.notes}</p>` : ''}
@@ -1124,24 +1195,24 @@
                 ...tripData.map(day => [
                     day.day,
                     day.date || '',
-                    day.location || '',
-                    day.transportType || '',
-                    day.transportFrom || '',
-                    day.transportTo || '',
-                    day.transportTime || '',
+                    `"${(day.location || '').replace(/"/g, '""')}"`,
+                    `"${(day.transportType || '').replace(/"/g, '""')}"`,
+                    `"${(day.transportFrom || '').replace(/"/g, '""')}"`,
+                    `"${(day.transportTo || '').replace(/"/g, '""')}"`,
+                    `"${(day.transportTime || '').replace(/"/g, '""')}"`,
                     day.transportCost || 0,
-                    day.accommodationType || '',
-                    day.accommodationName || '',
+                    `"${(day.accommodationType || '').replace(/"/g, '""')}"`,
+                    `"${(day.accommodationName || '').replace(/"/g, '""')}"`,
                     day.accommodationCost || 0,
-                    (day.notes || '').replace(/,/g, ';')
+                    `"${(day.notes || '').replace(/"/g, '""')}"`
                 ].join(','))
             ].join('\n');
 
-            const blob = new Blob([csvContent], { type: 'text/csv' });
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `${(tripInfo.name || 'trip').replace(/\s+/g, '_')}_adventure.csv`;
+            a.download = `${(tripInfo.name || 'trip').replace(/[^a-z0-9]/gi, '_').toLowerCase()}_adventure.csv`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -1188,26 +1259,42 @@
             }
             text += '\n🌟 Have an amazing adventure! Safe travels! 🎒';
 
-            // Create and show modal with text
+            // Create modal with text
+            showTextModal(text);
+        }
+
+        function showTextModal(text) {
             const modal = document.createElement('div');
-            modal.style.cssText = `
-                position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
-                background: rgba(0,0,0,0.8); display: flex; align-items: center; 
-                justify-content: center; z-index: 1000;
-            `;
+            modal.className = 'modal';
             
             modal.innerHTML = `
-                <div style="background: white; padding: 2rem; border-radius: 12px; max-width: 80%; max-height: 80%; overflow: auto;">
+                <div class="modal-content">
+                    <button class="close-btn" onclick="closeModal(this)">&times;</button>
                     <h3>📋 Trip Summary</h3>
-                    <textarea readonly style="width: 100%; height: 400px; font-family: monospace; font-size: 0.9rem;">${text}</textarea>
-                    <div style="margin-top: 1rem; text-align: center;">
-                        <button class="btn btn-primary" onclick="navigator.clipboard.writeText(\`${text.replace(/`/g, '\\`')}\`).then(() => showAlert('Copied to clipboard!', 'success'))">📋 Copy to Clipboard</button>
-                        <button class="btn btn-secondary" onclick="document.body.removeChild(this.closest('div').parentElement)">Close</button>
+                    <textarea readonly style="width: 100%; height: 400px; font-family: monospace; font-size: 0.9rem; margin: 1rem 0;">${text}</textarea>
+                    <div style="text-align: center;">
+                        <button class="btn btn-primary" onclick="copyToClipboard('${text.replace(/'/g, "\\'")}')">📋 Copy to Clipboard</button>
+                        <button class="btn btn-secondary" onclick="closeModal(this)">Close</button>
                     </div>
                 </div>
             `;
             
             document.body.appendChild(modal);
+        }
+
+        function closeModal(element) {
+            const modal = element.closest('.modal');
+            if (modal) {
+                document.body.removeChild(modal);
+            }
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                showAlert('✅ Copied to clipboard!', 'success');
+            }).catch(() => {
+                showAlert('❌ Failed to copy to clipboard', 'error');
+            });
         }
 
         // UI Update Functions
