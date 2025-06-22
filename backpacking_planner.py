@@ -4,8 +4,6 @@ from datetime import datetime, timedelta
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from utils.helpers import *
-from trip_overview import *
 
 # Page configuration
 st.set_page_config(
@@ -15,7 +13,64 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Enhanced CSS styling with modern interactive theme
+# ============================================================================
+# HELPER FUNCTIONS (Fixed and integrated)
+# ============================================================================
+
+def calculate_suggested_budget(travel_style: str, days: int) -> float:
+    """Calculate suggested budget based on travel style and duration"""
+    daily_rates = {
+        "Budget Backpacker": (25, 40),
+        "Mid-range Explorer": (40, 70),
+        "Comfort Traveller": (70, 120)
+    }
+    
+    # Extract style key from full string
+    style_key = travel_style.split('(')[0].strip()
+    
+    if style_key in daily_rates:
+        low, high = daily_rates[style_key]
+        return (low + high) / 2 * days
+    
+    return 50 * days  # Default fallback
+
+def calculate_day_completion(day_data: dict) -> float:
+    """Calculate completion percentage for a day's planning"""
+    required_fields = ['location', 'transport_from', 'transport_to', 'accommodation_type']
+    optional_fields = ['date', 'transport_time', 'accommodation_name', 'notes']
+    
+    # Required fields (70% weight)
+    required_completed = sum(1 for field in required_fields if day_data.get(field))
+    required_score = (required_completed / len(required_fields)) * 0.7
+    
+    # Optional fields (30% weight)  
+    optional_completed = sum(1 for field in optional_fields if day_data.get(field))
+    optional_score = (optional_completed / len(optional_fields)) * 0.3
+    
+    return required_score + optional_score
+
+def get_transport_emoji(transport_type: str) -> str:
+    """Get emoji for transport type"""
+    emoji_map = {
+        'Bus': '🚌', 'Bus (overnight)': '🚌', 'Train': '🚂', 'Train (overnight)': '🚂',
+        'Plane': '✈️', 'Ferry': '⛴️', 'Car/Taxi': '🚗', 'Walking': '🚶',
+        'Local Transport': '🚊', 'Cycling': '🚴'
+    }
+    return emoji_map.get(transport_type, '🚌')
+
+def get_accommodation_emoji(accommodation_type: str) -> str:
+    """Get emoji for accommodation type"""
+    emoji_map = {
+        'Hostel': '🏠', 'Hotel': '🏨', 'Guesthouse': '🏡', 'Camping': '⛺',
+        'Bus (sleeping)': '🚌', 'Train (sleeping)': '🚂', 'Airbnb': '🏠',
+        'Couchsurfing': '🛋️', "Friend's place": '👥', 'None (transit day)': '🚶'
+    }
+    return emoji_map.get(accommodation_type, '🏠')
+
+# ============================================================================
+# CSS STYLING (Enhanced and integrated)
+# ============================================================================
+
 def load_css():
     st.markdown("""
     <style>
@@ -34,7 +89,6 @@ def load_css():
         --warning-gradient: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
         
         --primary: #667eea;
-        --primary-light: #8b9aff;
         --secondary: #f5576c;
         --background: #ffffff;
         --surface: #f8fafc;
@@ -79,31 +133,9 @@ def load_css():
         animation: headerSlideIn 1s ease-out;
     }
     
-    .app-header::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: -100%;
-        width: 100%;
-        height: 100%;
-        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
-        animation: shimmer 3s infinite;
-    }
-    
     @keyframes headerSlideIn {
-        from {
-            transform: translateY(-50px);
-            opacity: 0;
-        }
-        to {
-            transform: translateY(0);
-            opacity: 1;
-        }
-    }
-    
-    @keyframes shimmer {
-        0% { left: -100%; }
-        100% { left: 100%; }
+        from { transform: translateY(-50px); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
     }
     
     .app-header h1 {
@@ -158,28 +190,6 @@ def load_css():
         transform: scaleX(1);
     }
     
-    /* Stats overview with animations */
-    .stats-overview {
-        background: var(--surface);
-        padding: 2rem;
-        border-radius: var(--radius-lg);
-        border: 1px solid var(--border);
-        margin-bottom: 2rem;
-        box-shadow: var(--shadow-md);
-        animation: fadeInUp 0.6s ease-out;
-    }
-    
-    @keyframes fadeInUp {
-        from {
-            transform: translateY(30px);
-            opacity: 0;
-        }
-        to {
-            transform: translateY(0);
-            opacity: 1;
-        }
-    }
-    
     /* Enhanced section headers */
     .section-header {
         font-family: 'Space Grotesk', sans-serif;
@@ -206,7 +216,7 @@ def load_css():
         border-radius: 2px;
     }
     
-    /* Modern transport section */
+    /* Transport and accommodation sections */
     .transport-section {
         background: linear-gradient(135deg, #e6f3ff 0%, #cce7ff 100%);
         padding: 1.5rem;
@@ -234,7 +244,6 @@ def load_css():
         border-color: var(--primary);
     }
     
-    /* Modern accommodation section */
     .accommodation-section {
         background: linear-gradient(135deg, #fff0f5 0%, #ffe4e8 100%);
         padding: 1.5rem;
@@ -273,31 +282,14 @@ def load_css():
         padding: 1rem 2rem;
         transition: var(--transition);
         box-shadow: var(--shadow-md);
-        position: relative;
-        overflow: hidden;
         text-transform: uppercase;
         letter-spacing: 0.5px;
         font-size: 0.9rem;
     }
     
-    .stButton > button::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: -100%;
-        width: 100%;
-        height: 100%;
-        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-        transition: var(--transition);
-    }
-    
     .stButton > button:hover {
         transform: translateY(-2px);
         box-shadow: var(--shadow-xl);
-    }
-    
-    .stButton > button:hover::before {
-        left: 100%;
     }
     
     /* Enhanced inputs */
@@ -354,22 +346,20 @@ def load_css():
         transform: translateY(-2px);
     }
     
-    /* Enhanced expander */
-    .streamlit-expanderHeader {
+    /* Enhanced metrics */
+    [data-testid="metric-container"] {
         background: var(--surface-elevated);
-        border: 2px solid var(--border);
-        border-radius: var(--radius-lg) !important;
-        font-family: 'Inter', sans-serif;
-        font-weight: 600;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: 1.5rem;
+        box-shadow: var(--shadow-sm);
         transition: var(--transition);
-        padding: 1rem 1.5rem;
     }
     
-    .streamlit-expanderHeader:hover {
-        background: var(--surface);
-        border-color: var(--primary);
-        transform: translateX(5px);
+    [data-testid="metric-container"]:hover {
+        transform: translateY(-2px);
         box-shadow: var(--shadow-md);
+        border-color: var(--primary);
     }
     
     /* Enhanced alerts */
@@ -406,27 +396,8 @@ def load_css():
     }
     
     @keyframes slideInRight {
-        from {
-            transform: translateX(100px);
-            opacity: 0;
-        }
-        to {
-            transform: translateX(0);
-            opacity: 1;
-        }
-    }
-    
-    /* Enhanced charts */
-    .js-plotly-plot {
-        border-radius: var(--radius-lg);
-        border: 1px solid var(--border);
-        background: var(--surface-elevated);
-        box-shadow: var(--shadow-md);
-        transition: var(--transition);
-    }
-    
-    .js-plotly-plot:hover {
-        box-shadow: var(--shadow-lg);
+        from { transform: translateX(100px); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
     }
     
     /* Typography improvements */
@@ -443,227 +414,55 @@ def load_css():
         line-height: 1.6 !important;
     }
     
-    /* Metrics enhancement */
-    [data-testid="metric-container"] {
-        background: var(--surface-elevated);
-        border: 1px solid var(--border);
-        border-radius: var(--radius-lg);
-        padding: 1.5rem;
-        box-shadow: var(--shadow-sm);
-        transition: var(--transition);
-    }
-    
-    [data-testid="metric-container"]:hover {
-        transform: translateY(-2px);
-        box-shadow: var(--shadow-md);
-        border-color: var(--primary);
-    }
-    
-    /* Footer enhancement */
-    .footer {
-        background: var(--primary-gradient);
-        color: white;
-        text-align: center;
-        padding: 3rem 2rem;
-        border-radius: var(--radius-xl);
-        margin-top: 4rem;
-        box-shadow: var(--shadow-xl);
-        position: relative;
-        overflow: hidden;
-    }
-    
-    .footer::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="2" fill="rgba(255,255,255,0.1)"/></svg>');
-        opacity: 0.1;
-    }
-    
-    /* Loading animation */
-    .loading {
-        display: inline-block;
-        width: 20px;
-        height: 20px;
-        border: 3px solid rgba(255,255,255,.3);
-        border-radius: 50%;
-        border-top-color: #fff;
-        animation: spin 1s ease-in-out infinite;
-    }
-    
-    @keyframes spin {
-        to { transform: rotate(360deg); }
-    }
-    
     /* Mobile responsiveness */
     @media (max-width: 768px) {
-        .app-header h1 {
-            font-size: 2.5rem;
-        }
-        
-        .main .block-container {
-            padding: 0.5rem;
-        }
-        
-        .card {
-            padding: 1rem;
-        }
-        
-        .section-header {
-            font-size: 2rem;
-        }
-    }
-    
-    /* Scroll animations */
-    .animate-on-scroll {
-        opacity: 0;
-        transform: translateY(30px);
-        transition: var(--transition);
-    }
-    
-    .animate-on-scroll.visible {
-        opacity: 1;
-        transform: translateY(0);
+        .app-header h1 { font-size: 2.5rem; }
+        .main .block-container { padding: 0.5rem; }
+        .card { padding: 1rem; }
+        .section-header { font-size: 2rem; }
     }
     </style>
     """, unsafe_allow_html=True)
 
-# Initialize session state with enhanced structure
+# ============================================================================
+# SESSION STATE INITIALIZATION (Fixed)
+# ============================================================================
+
 def init_session_state():
+    """Initialize session state with proper structure"""
     if 'trip_data' not in st.session_state:
         st.session_state.trip_data = []
+    
     if 'budget_data' not in st.session_state:
         st.session_state.budget_data = {
             'total_budget': 1000.0,
-            'spent': 0.0,
-            'categories': {},
-            'currency': '£'
+            'food_budget': 0.0,
+            'activities_budget': 0.0,
+            'shopping_budget': 0.0,
+            'misc_costs': 0.0,
+            'emergency_budget': 0.0,
+            'insurance_cost': 0.0,
+            'currency': 'GBP'
         }
+    
     if 'trip_info' not in st.session_state:
         st.session_state.trip_info = {
             'name': '',
             'start_date': None,
             'end_date': None,
             'destinations': '',
-            'travel_style': 'Budget Backpacker',
-            'group_size': 1
-        }
-    if 'user_preferences' not in st.session_state:
-        st.session_state.user_preferences = {
-            'theme': 'light',
-            'currency': 'GBP',
-            'notifications': True
+            'travel_style': '🎒 Budget Backpacker (£25-40/day)',
+            'group_size': 1,
+            'transport_preference': '🚌 Bus',
+            'accommodation_preference': '🏠 Hostels'
         }
 
-def main():
-    # Initialize session state
-    init_session_state()
-    
-    # Load CSS
-    load_css()
-    
-    # Enhanced header with animation
-    st.markdown("""
-    <div class="app-header">
-        <h1>🎒 Adventure Planner</h1>
-        <p>Plan your perfect backpacking journey with style and precision</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Quick stats if trip data exists
-    if st.session_state.trip_data:
-        show_enhanced_stats()
-    
-    # Enhanced navigation tabs
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "🌍 Trip Overview", 
-        "📅 Day-by-Day Planning", 
-        "💰 Budget Calculator", 
-        "📊 Analytics", 
-        "📋 Trip Summary"
-    ])
-    
-    with tab1:
-        trip_overview()
-    
-    with tab2:
-        day_by_day_planning()
-    
-    with tab3:
-        budget_calculator()
-    
-    with tab4:
-        analytics_dashboard()
-    
-    with tab5:
-        trip_summary()
-    
-    # Enhanced footer
-    st.markdown("""
-    <div class="footer">
-        <p>🎒 Crafted with ❤️ for adventurers worldwide | Safe travels! 🌟</p>
-        <p style="opacity: 0.8; font-size: 0.9rem; margin-top: 1rem;">
-            Plan • Explore • Adventure • Repeat
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-
-def show_enhanced_stats():
-    """Display enhanced trip statistics with animations"""
-    total_days = len(st.session_state.trip_data)
-    total_transport = sum(day.get('transport_cost', 0.0) for day in st.session_state.trip_data)
-    total_accommodation = sum(day.get('accommodation_cost', 0.0) for day in st.session_state.trip_data)
-    total_cost = total_transport + total_accommodation
-    budget = st.session_state.budget_data['total_budget']
-    remaining = budget - total_cost
-    
-    st.markdown("""
-    <div class="stats-overview">
-        <h3 style="text-align: center; margin-bottom: 2rem; font-family: 'Space Grotesk', sans-serif;">
-            📊 Your Adventure at a Glance
-        </h3>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    col1, col2, col3, col4, col5 = st.columns(5)
-    
-    with col1:
-        st.metric(
-            "📅 Duration", 
-            f"{total_days} days",
-            delta=f"{total_days/7:.1f} weeks" if total_days > 7 else None
-        )
-    with col2:
-        st.metric(
-            "🚌 Transport", 
-            f"£{total_transport:.0f}",
-            delta=f"{total_transport/total_days:.0f}/day" if total_days > 0 else None
-        )
-    with col3:
-        st.metric(
-            "🏨 Accommodation", 
-            f"£{total_accommodation:.0f}",
-            delta=f"{total_accommodation/total_days:.0f}/day" if total_days > 0 else None
-        )
-    with col4:
-        st.metric(
-            "💰 Total Cost", 
-            f"£{total_cost:.0f}",
-            delta=f"{(total_cost/budget*100):.1f}% of budget"
-        )
-    with col5:
-        st.metric(
-            "💸 Remaining", 
-            f"£{remaining:.0f}",
-            delta="Over budget!" if remaining < 0 else "Within budget",
-            delta_color="inverse" if remaining < 0 else "normal"
-        )
+# ============================================================================
+# COMPONENT FUNCTIONS (Fixed and integrated)
+# ============================================================================
 
 def trip_overview():
-    """Enhanced trip overview with better UX"""
+    """Enhanced trip overview component"""
     st.markdown('<h2 class="section-header">🌍 Trip Overview</h2>', unsafe_allow_html=True)
     
     # Trip basic information
@@ -675,43 +474,48 @@ def trip_overview():
     with col1:
         trip_name = st.text_input(
             "🎯 Trip Name", 
-            value=st.session_state.trip_info['name'],
+            value=st.session_state.trip_info.get('name', ''),
             placeholder="e.g., European Adventure, Southeast Asia Explorer",
-            help="Give your adventure a memorable name!"
+            help="Give your adventure a memorable name!",
+            key="overview_trip_name"
         )
         
         start_date = st.date_input(
             "📅 Start Date", 
-            value=st.session_state.trip_info['start_date'],
-            help="When does your adventure begin?"
+            value=st.session_state.trip_info.get('start_date'),
+            help="When does your adventure begin?",
+            key="overview_start_date"
         )
         
         end_date = st.date_input(
             "🏁 End Date", 
-            value=st.session_state.trip_info['end_date'],
-            help="When do you plan to return?"
+            value=st.session_state.trip_info.get('end_date'),
+            help="When do you plan to return?",
+            key="overview_end_date"
         )
         
     with col2:
         destinations = st.text_area(
             "🗺️ Main Destinations", 
-            value=st.session_state.trip_info['destinations'],
+            value=st.session_state.trip_info.get('destinations', ''),
             placeholder="List the places you're most excited to visit...",
             height=120,
-            help="Describe your must-visit destinations"
+            help="Describe your must-visit destinations",
+            key="overview_destinations"
         )
         
         total_budget = st.number_input(
             "💰 Total Budget (£)", 
             min_value=0.0, 
-            value=st.session_state.budget_data['total_budget'],
+            value=st.session_state.budget_data.get('total_budget', 1000.0),
             step=100.0,
-            help="Set your overall trip budget - be realistic!"
+            help="Set your overall trip budget - be realistic!",
+            key="overview_budget"
         )
     
     st.markdown('</div>', unsafe_allow_html=True)
     
-    # Travel preferences with enhanced UI
+    # Travel preferences
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.subheader("🎯 Travel Preferences")
     
@@ -725,8 +529,11 @@ def trip_overview():
                 "🌟 Mid-range Explorer (£40-70/day)", 
                 "💎 Comfort Traveller (£70+/day)"
             ],
-            help="Choose your travel comfort level"
+            index=0,
+            help="Choose your travel comfort level",
+            key="overview_travel_style"
         )
+    
     with col2:
         group_size = st.number_input(
             "👥 Group Size", 
@@ -734,52 +541,63 @@ def trip_overview():
             max_value=20, 
             value=st.session_state.trip_info.get('group_size', 1), 
             step=1,
-            help="How many travelers in your group?"
+            help="How many travelers in your group?",
+            key="overview_group_size"
         )
+    
     with col3:
         transport_preference = st.selectbox(
             "🚌 Preferred Transport", 
             ["🚌 Bus", "🚂 Train", "🔄 Mix of Both", "✈️ Budget Airlines", "🚗 Car Rental"],
-            help="Your preferred way to get around"
+            help="Your preferred way to get around",
+            key="overview_transport_pref"
         )
+    
     with col4:
         accommodation_preference = st.selectbox(
             "🏨 Accommodation Style",
             ["🏠 Hostels", "🏨 Hotels", "🏡 Mix of Both", "⛺ Camping", "🏘️ Local Stays"],
-            help="Where do you prefer to stay?"
+            help="Where do you prefer to stay?",
+            key="overview_accommodation_pref"
         )
     
     st.markdown('</div>', unsafe_allow_html=True)
     
-    # Enhanced save functionality
+    # Save functionality
     col1, col2, col3 = st.columns([1, 2, 1])
+    
     with col2:
-        if st.button("💾 Save Trip Overview", type="primary", use_container_width=True):
+        if st.button("💾 Save Trip Overview", type="primary", use_container_width=True, key="save_overview"):
+            # Update session state
             st.session_state.trip_info.update({
                 'name': trip_name,
                 'start_date': start_date,
                 'end_date': end_date,
                 'destinations': destinations,
                 'travel_style': travel_style,
-                'group_size': group_size
+                'group_size': group_size,
+                'transport_preference': transport_preference,
+                'accommodation_preference': accommodation_preference
             })
+            
             st.session_state.budget_data['total_budget'] = total_budget
             
             st.success("✅ Trip overview saved! Ready to plan your adventure!")
             
-            # Auto-suggest days with enhanced logic
+            # Auto-suggest days and budget
             if start_date and end_date and end_date > start_date:
                 suggested_days = (end_date - start_date).days + 1
+                
                 if suggested_days > len(st.session_state.trip_data):
                     st.info(f"📅 Based on your dates, you might want to plan {suggested_days} days. Head to Day-by-Day Planning to add more days!")
                 
-                # Budget suggestions based on travel style
-                daily_budget_low = 25 if "Budget" in travel_style else 40 if "Mid-range" in travel_style else 70
-                daily_budget_high = 40 if "Budget" in travel_style else 70 if "Mid-range" in travel_style else 120
-                suggested_budget = (daily_budget_low + daily_budget_high) / 2 * suggested_days
+                # Budget suggestions
+                suggested_budget = calculate_suggested_budget(travel_style, suggested_days)
                 
                 if total_budget < suggested_budget * 0.8:
                     st.warning(f"💡 For a {suggested_days}-day {travel_style.split('(')[0].strip()}, consider budgeting £{suggested_budget:.0f}-£{suggested_budget*1.3:.0f}")
+                elif total_budget > suggested_budget * 1.5:
+                    st.info(f"💰 Great budget! You have plenty of room for upgrades and spontaneous adventures!")
 
 def day_by_day_planning():
     """Enhanced day-by-day planning with better UX"""
@@ -825,7 +643,8 @@ def day_by_day_planning():
         day_cost = day_data.get('transport_cost', 0.0) + day_data.get('accommodation_cost', 0.0)
         
         # Enhanced expander with progress indicator
-        progress_indicator = "🟢" if day_data.get('location') and day_data.get('transport_from') else "🟡" if day_data.get('location') else "🔴"
+        completion = calculate_day_completion(day_data)
+        progress_indicator = "🟢" if completion >= 0.8 else "🟡" if completion >= 0.4 else "🔴"
         
         with st.expander(f"{progress_indicator} Day {day_data['day']} - {day_data.get('location', 'Location TBD')} | £{day_cost:.2f}", 
                         expanded=i == len(st.session_state.trip_data) - 1):
@@ -833,7 +652,8 @@ def day_by_day_planning():
             # Enhanced date and location section
             col1, col2 = st.columns(2)
             with col1:
-                date = st.date_input("📅 Date", key=f"date_{i}", value=pd.to_datetime(day_data.get('date')) if day_data.get('date') else None)
+                date = st.date_input("📅 Date", key=f"date_{i}", 
+                                   value=pd.to_datetime(day_data.get('date')).date() if day_data.get('date') else None)
             with col2:
                 location = st.text_input(
                     "📍 Location/City", 
@@ -993,18 +813,24 @@ def budget_calculator():
     
     with col1:
         st.markdown("**🍽️ Daily Expenses**")
-        food_budget = st.number_input("Food & Drink (£)", min_value=0.0, value=st.session_state.budget_data.get('food_budget', 0.0), step=5.0)
-        activities_budget = st.number_input("Activities & Attractions (£)", min_value=0.0, value=st.session_state.budget_data.get('activities_budget', 0.0), step=5.0)
+        food_budget = st.number_input("Food & Drink (£)", min_value=0.0, 
+                                    value=st.session_state.budget_data.get('food_budget', 0.0), step=5.0)
+        activities_budget = st.number_input("Activities & Attractions (£)", min_value=0.0, 
+                                          value=st.session_state.budget_data.get('activities_budget', 0.0), step=5.0)
         
     with col2:
         st.markdown("**🛍️ Shopping & Extras**")
-        shopping_budget = st.number_input("Shopping & Souvenirs (£)", min_value=0.0, value=st.session_state.budget_data.get('shopping_budget', 0.0), step=5.0)
-        misc_costs = st.number_input("Miscellaneous (£)", min_value=0.0, value=st.session_state.budget_data.get('misc_costs', 0.0), step=5.0)
+        shopping_budget = st.number_input("Shopping & Souvenirs (£)", min_value=0.0, 
+                                        value=st.session_state.budget_data.get('shopping_budget', 0.0), step=5.0)
+        misc_costs = st.number_input("Miscellaneous (£)", min_value=0.0, 
+                                   value=st.session_state.budget_data.get('misc_costs', 0.0), step=5.0)
     
     with col3:
         st.markdown("**🛡️ Safety & Security**")
-        emergency_budget = st.number_input("Emergency Fund (£)", min_value=0.0, value=st.session_state.budget_data.get('emergency_budget', 0.0), step=10.0)
-        insurance_cost = st.number_input("Travel Insurance (£)", min_value=0.0, value=st.session_state.budget_data.get('insurance_cost', 0.0), step=5.0)
+        emergency_budget = st.number_input("Emergency Fund (£)", min_value=0.0, 
+                                         value=st.session_state.budget_data.get('emergency_budget', 0.0), step=10.0)
+        insurance_cost = st.number_input("Travel Insurance (£)", min_value=0.0, 
+                                       value=st.session_state.budget_data.get('insurance_cost', 0.0), step=5.0)
     
     st.markdown('</div>', unsafe_allow_html=True)
     
@@ -1107,7 +933,7 @@ def budget_calculator():
             st.plotly_chart(fig, use_container_width=True)
 
 def analytics_dashboard():
-    """New analytics dashboard for trip insights"""
+    """Analytics dashboard for trip insights"""
     st.markdown('<h2 class="section-header">📊 Trip Analytics</h2>', unsafe_allow_html=True)
     
     if not st.session_state.trip_data:
@@ -1355,7 +1181,65 @@ def trip_summary():
     
     st.markdown('</div>', unsafe_allow_html=True)
 
-# Helper functions
+# ============================================================================
+# UTILITY FUNCTIONS (Fixed)
+# ============================================================================
+
+def show_enhanced_stats():
+    """Display enhanced trip statistics with animations"""
+    if not st.session_state.trip_data:
+        return
+        
+    total_days = len(st.session_state.trip_data)
+    total_transport = sum(day.get('transport_cost', 0.0) for day in st.session_state.trip_data)
+    total_accommodation = sum(day.get('accommodation_cost', 0.0) for day in st.session_state.trip_data)
+    total_cost = total_transport + total_accommodation
+    budget = st.session_state.budget_data['total_budget']
+    remaining = budget - total_cost
+    
+    st.markdown("""
+    <div style="background: var(--surface); padding: 2rem; border-radius: var(--radius-lg); 
+                border: 1px solid var(--border); margin-bottom: 2rem; box-shadow: var(--shadow-md);">
+        <h3 style="text-align: center; margin-bottom: 2rem; font-family: 'Space Grotesk', sans-serif;">
+            📊 Your Adventure at a Glance
+        </h3>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col1, col2, col3, col4, col5 = st.columns(5)
+    
+    with col1:
+        st.metric(
+            "📅 Duration", 
+            f"{total_days} days",
+            delta=f"{total_days/7:.1f} weeks" if total_days > 7 else None
+        )
+    with col2:
+        st.metric(
+            "🚌 Transport", 
+            f"£{total_transport:.0f}",
+            delta=f"{total_transport/total_days:.0f}/day" if total_days > 0 else None
+        )
+    with col3:
+        st.metric(
+            "🏨 Accommodation", 
+            f"£{total_accommodation:.0f}",
+            delta=f"{total_accommodation/total_days:.0f}/day" if total_days > 0 else None
+        )
+    with col4:
+        st.metric(
+            "💰 Total Cost", 
+            f"£{total_cost:.0f}",
+            delta=f"{(total_cost/budget*100):.1f}% of budget"
+        )
+    with col5:
+        st.metric(
+            "💸 Remaining", 
+            f"£{remaining:.0f}",
+            delta="Over budget!" if remaining < 0 else "Within budget",
+            delta_color="inverse" if remaining < 0 else "normal"
+        )
+
 def add_new_day():
     """Add a new day with enhanced defaults"""
     new_day = {
@@ -1400,15 +1284,10 @@ def move_day_up(index):
             day['day'] = j + 1
         st.rerun()
 
-def calculate_day_completion(day_data):
-    """Calculate completion percentage for a day"""
-    required_fields = ['location', 'transport_from', 'transport_to', 'accommodation_type']
-    completed_fields = sum(1 for field in required_fields if day_data.get(field))
-    return completed_fields / len(required_fields)
-
 def update_day_data(index, data):
     """Update day data in session state"""
-    st.session_state.trip_data[index].update(data)
+    if index < len(st.session_state.trip_data):
+        st.session_state.trip_data[index].update(data)
 
 def get_transport_index(transport_type):
     """Get index for transport type selectbox"""
@@ -1497,14 +1376,14 @@ def show_detailed_statistics():
         st.markdown("**🚌 Transportation Breakdown:**")
         for transport, count in transport_counts.items():
             cost = transport_costs.get(transport, 0)
-            emoji = "🚌" if "Bus" in transport else "🚂" if "Train" in transport else "🚶" if transport == "Walking" else "🚗"
+            emoji = get_transport_emoji(transport)
             st.write(f"{emoji} {transport}: {count} journey{'s' if count != 1 else ''} (£{cost:.2f})")
     
     with col2:
         st.markdown("**🏨 Accommodation Breakdown:**")
         for accommodation, count in accommodation_counts.items():
             cost = accommodation_costs.get(accommodation, 0)
-            emoji = "🏨" if "Hotel" in accommodation else "🏠" if "Hostel" in accommodation else "⛺" if accommodation == "Camping" else "🛏️"
+            emoji = get_accommodation_emoji(accommodation)
             st.write(f"{emoji} {accommodation}: {count} night{'s' if count != 1 else ''} (£{cost:.2f})")
     
     # Enhanced cost analysis
@@ -1524,6 +1403,66 @@ def show_detailed_statistics():
     with col4:
         budget_used = (total_cost / st.session_state.budget_data['total_budget'] * 100) if st.session_state.budget_data['total_budget'] > 0 else 0
         st.metric("📈 Budget Used", f"{budget_used:.1f}%")
+
+# ============================================================================
+# MAIN APPLICATION
+# ============================================================================
+
+def main():
+    """Main application function"""
+    # Initialize session state
+    init_session_state()
+    
+    # Load CSS
+    load_css()
+    
+    # Enhanced header with animation
+    st.markdown("""
+    <div class="app-header">
+        <h1>🎒 Adventure Planner</h1>
+        <p>Plan your perfect backpacking journey with style and precision</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Quick stats if trip data exists
+    if st.session_state.trip_data:
+        show_enhanced_stats()
+    
+    # Enhanced navigation tabs
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "🌍 Trip Overview", 
+        "📅 Day-by-Day Planning", 
+        "💰 Budget Calculator", 
+        "📊 Analytics", 
+        "📋 Trip Summary"
+    ])
+    
+    with tab1:
+        trip_overview()
+    
+    with tab2:
+        day_by_day_planning()
+    
+    with tab3:
+        budget_calculator()
+    
+    with tab4:
+        analytics_dashboard()
+    
+    with tab5:
+        trip_summary()
+    
+    # Enhanced footer
+    st.markdown("""
+    <div style="background: var(--primary-gradient); color: white; text-align: center; 
+                padding: 3rem 2rem; border-radius: var(--radius-xl); margin-top: 4rem; 
+                box-shadow: var(--shadow-xl); position: relative; overflow: hidden;">
+        <p style="margin: 0; font-size: 1.2rem;">🎒 Crafted with ❤️ for adventurers worldwide | Safe travels! 🌟</p>
+        <p style="opacity: 0.8; font-size: 0.9rem; margin-top: 1rem;">
+            Plan • Explore • Adventure • Repeat
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
