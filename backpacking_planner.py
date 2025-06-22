@@ -1292,12 +1292,10 @@ def get_accommodation_index(accommodation_type):
 # ============================================================================
 
 def main():
-    """Enhanced main application with authentication and storage"""
-    # Initialize session state
+
+def main():
+    """Main application entry point"""
     init_session_state()
-    
-    # Load CSS
-    load_css()
     
     # Check authentication
     if 'user' not in st.session_state:
@@ -1305,23 +1303,18 @@ def main():
         return
     
     # Show user menu
-    show_user_menu()
-    show_auto_save_indicator()
+    st.sidebar.markdown("---")
+    st.sidebar.markdown(f"👤 **{st.session_state.user['username']}**")
     
-    # Enhanced header
-    st.markdown(f"""
-    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                color: white; padding: 3rem 2rem; border-radius: 16px; 
-                text-align: center; margin-bottom: 2rem; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);">
-        <h1 style="margin: 0; font-size: 3rem;">🎒 Adventure Planner</h1>
-        <p style="margin: 1rem 0 0 0; font-size: 1.2rem;">Welcome back, {st.session_state.user['username']}!</p>
-        <p style="margin: 0.5rem 0 0 0; opacity: 0.8;">Plan your perfect backpacking journey</p>
-    </div>
-    """, unsafe_allow_html=True)
+    if st.sidebar.button("🚪 Logout"):
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.rerun()
     
-    # Navigation
+    # Main application logic
     if st.session_state.current_view == 'trips':
         show_trip_manager()
+        
     elif st.session_state.current_view == 'planning':
         # Navigation buttons
         col1, col2, col3 = st.columns([1, 2, 1])
