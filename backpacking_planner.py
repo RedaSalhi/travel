@@ -1,14 +1,9 @@
 import streamlit as st
 import pandas as pd
-import json
-import sqlite3
-import hashlib
-import os
 from datetime import datetime, timedelta
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from pathlib import Path
 
 # Page configuration
 st.set_page_config(
@@ -19,439 +14,7 @@ st.set_page_config(
 )
 
 # ============================================================================
-# DATABASE & STORAGE SETUP
-# ============================================================================
-
-class TripDatabase:
-    def __init__(self, db_path="data/trip_planner.db"):
-        self.db_path = db_path
-        # Create data directory if it doesn't exist
-        os.makedirs(os.path.dirname(db_path), exist_ok=True)
-        self.init_database()
-    
-    def init_database(self):
-        """Initialize SQLite database with required tables"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # Users table
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT UNIQUE NOT NULL,
-                email TEXT UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        # Trips table
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS trips (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
-                name TEXT NOT NULL,
-                start_date DATE,
-                end_date DATE,
-                destinations TEXT,
-                travel_style TEXT,
-                group_size INTEGER,
-                total_budget REAL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users (id)
-            )
-        ''')
-        
-        # Days table
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS trip_days (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                trip_id INTEGER,
-                day_number INTEGER,
-                date DATE,
-                location TEXT,
-                transport_type TEXT,
-                transport_from TEXT,
-                transport_to TEXT,
-                transport_time TEXT,
-                transport_cost REAL,
-                accommodation_type TEXT,
-                accommodation_name TEXT,
-                accommodation_cost REAL,
-                notes TEXT,
-                FOREIGN KEY (trip_id) REFERENCES trips (id)
-            )
-        ''')
-        
-        # Budget categories table
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS budget_categories (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                trip_id INTEGER,
-                category_name TEXT,
-                budgeted_amount REAL,
-                spent_amount REAL DEFAULT 0,
-                FOREIGN KEY (trip_id) REFERENCES trips (id)
-            )
-        ''')
-        
-        conn.commit()
-        conn.close()
-    
-    def hash_password(self, password):
-        """Hash password using SHA-256"""
-        return hashlib.sha256(password.encode()).hexdigest()
-    
-    def create_user(self, username, email, password):
-        """Create a new user"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        try:
-            password_hash = self.hash_password(password)
-            cursor.execute(
-                "INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)",
-                (username, email, password_hash)
-            )
-            conn.commit()
-            return cursor.lastrowid
-        except sqlite3.IntegrityError:
-            return None
-        finally:
-            conn.close()
-    
-    def authenticate_user(self, username, password):
-        """Authenticate user login"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        password_hash = self.hash_password(password)
-        cursor.execute(
-            "SELECT id, username, email FROM users WHERE username = ? AND password_hash = ?",
-            (username, password_hash)
-        )
-        user = cursor.fetchone()
-        conn.close()
-        return user
-    
-    def save_trip(self, user_id, trip_data, budget_data, days_data):
-        """Save complete trip data"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        try:
-            # Save or update trip
-            if trip_data.get('id'):
-                cursor.execute('''
-                    UPDATE trips SET name=?, start_date=?, end_date=?, destinations=?, 
-                    travel_style=?, group_size=?, total_budget=?, updated_at=CURRENT_TIMESTAMP
-                    WHERE id=? AND user_id=?
-                ''', (
-                    trip_data['name'], trip_data.get('start_date'), trip_data.get('end_date'),
-                    trip_data.get('destinations'), trip_data.get('travel_style'),
-                    trip_data.get('group_size'), budget_data.get('total_budget'),
-                    trip_data['id'], user_id
-                ))
-                trip_id = trip_data['id']
-            else:
-                cursor.execute('''
-                    INSERT INTO trips (user_id, name, start_date, end_date, destinations, 
-                    travel_style, group_size, total_budget) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (
-                    user_id, trip_data['name'], trip_data.get('start_date'), 
-                    trip_data.get('end_date'), trip_data.get('destinations'),
-                    trip_data.get('travel_style'), trip_data.get('group_size'),
-                    budget_data.get('total_budget')
-                ))
-                trip_id = cursor.lastrowid
-            
-            # Clear existing days and budget categories
-            cursor.execute("DELETE FROM trip_days WHERE trip_id = ?", (trip_id,))
-            cursor.execute("DELETE FROM budget_categories WHERE trip_id = ?", (trip_id,))
-            
-            # Save days
-            for day in days_data:
-                cursor.execute('''
-                    INSERT INTO trip_days (trip_id, day_number, date, location, transport_type,
-                    transport_from, transport_to, transport_time, transport_cost,
-                    accommodation_type, accommodation_name, accommodation_cost, notes)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (
-                    trip_id, day['day'], day.get('date'), day.get('location'),
-                    day.get('transport_type'), day.get('transport_from'), day.get('transport_to'),
-                    day.get('transport_time'), day.get('transport_cost'),
-                    day.get('accommodation_type'), day.get('accommodation_name'),
-                    day.get('accommodation_cost'), day.get('notes')
-                ))
-            
-            # Save budget categories
-            for category, amount in budget_data.items():
-                if category != 'total_budget' and amount > 0:
-                    cursor.execute('''
-                        INSERT INTO budget_categories (trip_id, category_name, budgeted_amount)
-                        VALUES (?, ?, ?)
-                    ''', (trip_id, category, amount))
-            
-            conn.commit()
-            return trip_id
-        except Exception as e:
-            conn.rollback()
-            raise e
-        finally:
-            conn.close()
-    
-    def get_user_trips(self, user_id):
-        """Get all trips for a user"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT id, name, start_date, end_date, destinations, total_budget, 
-                   created_at, updated_at
-            FROM trips WHERE user_id = ? ORDER BY updated_at DESC
-        ''', (user_id,))
-        trips = cursor.fetchall()
-        conn.close()
-        return trips
-    
-    def load_trip(self, trip_id, user_id):
-        """Load complete trip data"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # Load trip info
-        cursor.execute('''
-            SELECT * FROM trips WHERE id = ? AND user_id = ?
-        ''', (trip_id, user_id))
-        trip = cursor.fetchone()
-        
-        if not trip:
-            conn.close()
-            return None, None, None
-        
-        # Load days
-        cursor.execute('''
-            SELECT * FROM trip_days WHERE trip_id = ? ORDER BY day_number
-        ''', (trip_id,))
-        days = cursor.fetchall()
-        
-        # Load budget categories
-        cursor.execute('''
-            SELECT category_name, budgeted_amount FROM budget_categories WHERE trip_id = ?
-        ''', (trip_id,))
-        budget_categories = cursor.fetchall()
-        
-        conn.close()
-        
-        # Convert to format expected by app
-        trip_info = {
-            'id': trip[0],
-            'name': trip[2],
-            'start_date': pd.to_datetime(trip[3]).date() if trip[3] else None,
-            'end_date': pd.to_datetime(trip[4]).date() if trip[4] else None,
-            'destinations': trip[5] or '',
-            'travel_style': trip[6] or '🎒 Budget Backpacker (£25-40/day)',
-            'group_size': trip[7] or 1
-        }
-        
-        budget_data = {'total_budget': trip[8] or 1000.0}
-        for category, amount in budget_categories:
-            budget_data[category] = amount
-        
-        days_data = []
-        for day in days:
-            days_data.append({
-                'day': day[2],
-                'date': day[3] or '',
-                'location': day[4] or '',
-                'transport_type': day[5] or 'Bus',
-                'transport_from': day[6] or '',
-                'transport_to': day[7] or '',
-                'transport_time': day[8] or '',
-                'transport_cost': day[9] or 0.0,
-                'accommodation_type': day[10] or 'Hostel',
-                'accommodation_name': day[11] or '',
-                'accommodation_cost': day[12] or 0.0,
-                'notes': day[13] or ''
-            })
-        
-        return trip_info, budget_data, days_data
-    
-    def delete_trip(self, trip_id, user_id):
-        """Delete a trip and all associated data"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # Verify ownership
-        cursor.execute("SELECT id FROM trips WHERE id = ? AND user_id = ?", (trip_id, user_id))
-        if not cursor.fetchone():
-            conn.close()
-            return False
-        
-        # Delete related data
-        cursor.execute("DELETE FROM trip_days WHERE trip_id = ?", (trip_id,))
-        cursor.execute("DELETE FROM budget_categories WHERE trip_id = ?", (trip_id,))
-        cursor.execute("DELETE FROM trips WHERE id = ?", (trip_id,))
-        
-        conn.commit()
-        conn.close()
-        return True
-
-# Initialize database
-@st.cache_resource
-def get_database():
-    return TripDatabase()
-
-db = get_database()
-
-# ============================================================================
-# AUTHENTICATION SYSTEM
-# ============================================================================
-
-def show_login_page():
-    """Display login/register page"""
-    st.markdown("""
-    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                color: white; padding: 4rem 2rem; border-radius: 16px; 
-                text-align: center; margin-bottom: 2rem; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);">
-        <h1 style="margin: 0; font-size: 3.5rem;">🎒 Adventure Planner</h1>
-        <p style="margin: 1rem 0 0 0; font-size: 1.3rem;">Your personal backpacking companion</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    tab1, tab2 = st.tabs(["🔑 Login", "📝 Register"])
-    
-    with tab1:
-        st.subheader("Welcome Back!")
-        with st.form("login_form"):
-            username = st.text_input("Username")
-            password = st.text_input("Password", type="password")
-            login_button = st.form_submit_button("Login", type="primary", use_container_width=True)
-            
-            if login_button:
-                if username and password:
-                    user = db.authenticate_user(username, password)
-                    if user:
-                        st.session_state.user = {
-                            'id': user[0],
-                            'username': user[1],
-                            'email': user[2]
-                        }
-                        st.success(f"Welcome back, {user[1]}!")
-                        st.rerun()
-                    else:
-                        st.error("Invalid username or password")
-                else:
-                    st.error("Please fill in all fields")
-    
-    with tab2:
-        st.subheader("Join the Adventure!")
-        with st.form("register_form"):
-            new_username = st.text_input("Choose Username")
-            new_email = st.text_input("Email Address")
-            new_password = st.text_input("Create Password", type="password")
-            confirm_password = st.text_input("Confirm Password", type="password")
-            register_button = st.form_submit_button("Create Account", type="primary", use_container_width=True)
-            
-            if register_button:
-                if new_username and new_email and new_password and confirm_password:
-                    if new_password != confirm_password:
-                        st.error("Passwords don't match")
-                    elif len(new_password) < 6:
-                        st.error("Password must be at least 6 characters")
-                    else:
-                        user_id = db.create_user(new_username, new_email, new_password)
-                        if user_id:
-                            st.success("Account created successfully! Please login.")
-                        else:
-                            st.error("Username or email already exists")
-                else:
-                    st.error("Please fill in all fields")
-
-def show_user_menu():
-    """Display user menu in sidebar"""
-    if 'user' in st.session_state:
-        st.sidebar.markdown("---")
-        st.sidebar.markdown(f"👤 **{st.session_state.user['username']}**")
-        
-        if st.sidebar.button("🚪 Logout"):
-            for key in list(st.session_state.keys()):
-                del st.session_state[key]
-            st.rerun()
-
-def show_trip_manager():
-    """Display trip management interface"""
-    st.markdown('<h2 style="text-align: center; color: #667eea;">📁 My Trips</h2>', unsafe_allow_html=True)
-    
-    user_id = st.session_state.user['id']
-    trips = db.get_user_trips(user_id)
-    
-    col1, col2 = st.columns([3, 1])
-    
-    with col1:
-        st.subheader("Your Adventures")
-    
-    with col2:
-        if st.button("➕ New Trip", type="primary"):
-            # Reset session state for new trip
-            st.session_state.trip_data = []
-            st.session_state.budget_data = {
-                'total_budget': 1000.0,
-                'food_budget': 0.0,
-                'activities_budget': 0.0,
-                'shopping_budget': 0.0,
-                'misc_costs': 0.0,
-                'emergency_budget': 0.0,
-                'insurance_cost': 0.0
-            }
-            st.session_state.trip_info = {
-                'name': '',
-                'start_date': None,
-                'end_date': None,
-                'destinations': '',
-                'travel_style': '🎒 Budget Backpacker (£25-40/day)',
-                'group_size': 1
-            }
-            st.session_state.current_view = 'planning'
-            st.rerun()
-    
-    if trips:
-        for trip in trips:
-            with st.expander(f"🎒 {trip[1]} - {trip[2] or 'No dates'} to {trip[3] or ''}", expanded=False):
-                col1, col2, col3, col4 = st.columns([2, 2, 1, 1])
-                
-                with col1:
-                    st.write(f"📍 **Destinations:** {trip[4] or 'Not specified'}")
-                    st.write(f"💰 **Budget:** £{trip[5] or 0:.0f}")
-                
-                with col2:
-                    st.write(f"📅 **Created:** {trip[6][:10] if trip[6] else 'Unknown'}")
-                    st.write(f"🔄 **Updated:** {trip[7][:10] if trip[7] else 'Unknown'}")
-                
-                with col3:
-                    if st.button("📝 Edit", key=f"edit_{trip[0]}"):
-                        # Load trip data
-                        trip_info, budget_data, days_data = db.load_trip(trip[0], user_id)
-                        if trip_info:
-                            st.session_state.trip_info = trip_info
-                            st.session_state.budget_data = budget_data
-                            st.session_state.trip_data = days_data
-                            st.session_state.current_view = 'planning'
-                            st.rerun()
-                
-                with col4:
-                    if st.button("🗑️ Delete", key=f"delete_{trip[0]}", type="secondary"):
-                        if st.session_state.get(f"confirm_delete_{trip[0]}", False):
-                            if db.delete_trip(trip[0], user_id):
-                                st.success("Trip deleted!")
-                                st.rerun()
-                        else:
-                            st.session_state[f"confirm_delete_{trip[0]}"] = True
-                            st.warning("Click again to confirm deletion")
-    else:
-        st.info("No trips yet. Create your first adventure!")
-
-# ============================================================================
-# ENHANCED HELPER FUNCTIONS
+# HELPER FUNCTIONS (Fixed and integrated)
 # ============================================================================
 
 def calculate_suggested_budget(travel_style: str, days: int) -> float:
@@ -462,64 +25,63 @@ def calculate_suggested_budget(travel_style: str, days: int) -> float:
         "Comfort Traveller": (70, 120)
     }
     
+    # Extract style key from full string
     style_key = travel_style.split('(')[0].strip()
     
     if style_key in daily_rates:
         low, high = daily_rates[style_key]
         return (low + high) / 2 * days
     
-    return 50 * days
+    return 50 * days  # Default fallback
 
 def calculate_day_completion(day_data: dict) -> float:
     """Calculate completion percentage for a day's planning"""
     required_fields = ['location', 'transport_from', 'transport_to', 'accommodation_type']
     optional_fields = ['date', 'transport_time', 'accommodation_name', 'notes']
     
+    # Required fields (70% weight)
     required_completed = sum(1 for field in required_fields if day_data.get(field))
     required_score = (required_completed / len(required_fields)) * 0.7
     
+    # Optional fields (30% weight)  
     optional_completed = sum(1 for field in optional_fields if day_data.get(field))
     optional_score = (optional_completed / len(optional_fields)) * 0.3
     
     return required_score + optional_score
 
-def save_current_trip():
-    """Save current trip to database"""
-    if 'user' not in st.session_state:
-        return False
-    
-    user_id = st.session_state.user['id']
-    trip_info = st.session_state.trip_info
-    budget_data = st.session_state.budget_data
-    days_data = st.session_state.trip_data
-    
-    if not trip_info.get('name'):
-        st.error("Please provide a trip name before saving")
-        return False
-    
-    try:
-        trip_id = db.save_trip(user_id, trip_info, budget_data, days_data)
-        st.session_state.trip_info['id'] = trip_id
-        st.success("Trip saved successfully!")
-        return True
-    except Exception as e:
-        st.error(f"Error saving trip: {str(e)}")
-        return False
+def get_transport_emoji(transport_type: str) -> str:
+    """Get emoji for transport type"""
+    emoji_map = {
+        'Bus': '🚌', 'Bus (overnight)': '🚌', 'Train': '🚂', 'Train (overnight)': '🚂',
+        'Plane': '✈️', 'Ferry': '⛴️', 'Car/Taxi': '🚗', 'Walking': '🚶',
+        'Local Transport': '🚊', 'Cycling': '🚴'
+    }
+    return emoji_map.get(transport_type, '🚌')
+
+def get_accommodation_emoji(accommodation_type: str) -> str:
+    """Get emoji for accommodation type"""
+    emoji_map = {
+        'Hostel': '🏠', 'Hotel': '🏨', 'Guesthouse': '🏡', 'Camping': '⛺',
+        'Bus (sleeping)': '🚌', 'Train (sleeping)': '🚂', 'Airbnb': '🏠',
+        'Couchsurfing': '🛋️', "Friend's place": '👥', 'None (transit day)': '🚶'
+    }
+    return emoji_map.get(accommodation_type, '🏠')
 
 # ============================================================================
-# ENHANCED UI COMPONENTS
+# CSS STYLING (Enhanced and integrated)
 # ============================================================================
 
 def load_css():
-    """Load enhanced CSS with app-like styling"""
     st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
     
+    /* Hide sidebar */
     section[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
+        display: none !important;
     }
     
+    /* Modern color palette */
     :root {
         --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         --secondary-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
@@ -532,31 +94,73 @@ def load_css():
         --surface: #f8fafc;
         --surface-elevated: #ffffff;
         --border: #e2e8f0;
+        --border-light: #f1f5f9;
         --text-primary: #1a202c;
         --text-secondary: #4a5568;
+        --text-light: #718096;
         
-        --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
-        --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-        --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+        --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+        --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
         
+        --radius-sm: 6px;
+        --radius: 8px;
         --radius-lg: 12px;
         --radius-xl: 16px;
         
         --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
     
+    /* Main container */
     .main .block-container {
         padding: 1rem;
         max-width: 1400px;
         background: var(--background);
     }
     
+    /* Animated header */
+    .app-header {
+        background: var(--primary-gradient);
+        color: white;
+        padding: 4rem 2rem;
+        border-radius: var(--radius-xl);
+        text-align: center;
+        margin-bottom: 2rem;
+        box-shadow: var(--shadow-xl);
+        position: relative;
+        overflow: hidden;
+        animation: headerSlideIn 1s ease-out;
+    }
+    
+    @keyframes headerSlideIn {
+        from { transform: translateY(-50px); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+    }
+    
+    .app-header h1 {
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 3.5rem;
+        font-weight: 700;
+        margin: 0;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        letter-spacing: -0.02em;
+    }
+    
+    .app-header p {
+        font-family: 'Inter', sans-serif;
+        font-size: 1.3rem;
+        margin: 1rem 0 0 0;
+        opacity: 0.9;
+        font-weight: 400;
+    }
+    
+    /* Interactive cards */
     .card {
         background: var(--surface-elevated);
         border-radius: var(--radius-lg);
         padding: 2rem;
-        border: 1px solid var(--border);
+        border: 1px solid var(--border-light);
         box-shadow: var(--shadow-sm);
         margin-bottom: 2rem;
         transition: var(--transition);
@@ -586,6 +190,88 @@ def load_css():
         transform: scaleX(1);
     }
     
+    /* Enhanced section headers */
+    .section-header {
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 2.5rem;
+        font-weight: 600;
+        background: var(--primary-gradient);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        text-align: center;
+        margin: 3rem 0 2rem 0;
+        position: relative;
+    }
+    
+    .section-header::after {
+        content: '';
+        position: absolute;
+        bottom: -10px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 80px;
+        height: 4px;
+        background: var(--primary-gradient);
+        border-radius: 2px;
+    }
+    
+    /* Transport and accommodation sections */
+    .transport-section {
+        background: linear-gradient(135deg, #e6f3ff 0%, #cce7ff 100%);
+        padding: 1.5rem;
+        border-radius: var(--radius-lg);
+        border: 2px solid #b3d9ff;
+        margin-bottom: 1rem;
+        transition: var(--transition);
+        position: relative;
+    }
+    
+    .transport-section::before {
+        content: '🚌';
+        position: absolute;
+        top: -10px;
+        right: 15px;
+        font-size: 1.5rem;
+        background: white;
+        padding: 5px 10px;
+        border-radius: 20px;
+        box-shadow: var(--shadow-sm);
+    }
+    
+    .transport-section:hover {
+        transform: translateX(5px);
+        border-color: var(--primary);
+    }
+    
+    .accommodation-section {
+        background: linear-gradient(135deg, #fff0f5 0%, #ffe4e8 100%);
+        padding: 1.5rem;
+        border-radius: var(--radius-lg);
+        border: 2px solid #ffb3c1;
+        margin-bottom: 1rem;
+        transition: var(--transition);
+        position: relative;
+    }
+    
+    .accommodation-section::before {
+        content: '🏨';
+        position: absolute;
+        top: -10px;
+        right: 15px;
+        font-size: 1.5rem;
+        background: white;
+        padding: 5px 10px;
+        border-radius: 20px;
+        box-shadow: var(--shadow-sm);
+    }
+    
+    .accommodation-section:hover {
+        transform: translateX(5px);
+        border-color: var(--secondary);
+    }
+    
+    /* Enhanced buttons */
     .stButton > button {
         background: var(--primary-gradient);
         color: white;
@@ -606,17 +292,107 @@ def load_css():
         box-shadow: var(--shadow-xl);
     }
     
-    .save-indicator {
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: var(--success-gradient);
+    /* Enhanced inputs */
+    .stTextInput > div > div > input,
+    .stSelectbox > div > div > div,
+    .stNumberInput > div > div > input,
+    .stTextArea > div > div > textarea,
+    .stDateInput > div > div > input {
+        border: 2px solid var(--border);
+        border-radius: var(--radius);
+        font-family: 'Inter', sans-serif;
+        background: var(--surface-elevated);
+        transition: var(--transition);
+        padding: 0.75rem 1rem;
+    }
+    
+    .stTextInput > div > div > input:focus,
+    .stSelectbox > div > div > div:focus,
+    .stNumberInput > div > div > input:focus,
+    .stTextArea > div > div > textarea:focus,
+    .stDateInput > div > div > input:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        outline: none;
+        transform: translateY(-2px);
+    }
+    
+    /* Modern tabs */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 12px;
+        background: var(--surface);
+        padding: 0.75rem;
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border);
+        box-shadow: var(--shadow-sm);
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        background: transparent;
+        border: none;
+        border-radius: var(--radius);
+        color: var(--text-secondary);
+        font-family: 'Inter', sans-serif;
+        font-weight: 500;
+        padding: 1rem 1.5rem;
+        transition: var(--transition);
+        position: relative;
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background: var(--primary-gradient);
         color: white;
-        padding: 10px 20px;
-        border-radius: 25px;
-        box-shadow: var(--shadow-lg);
-        z-index: 1000;
-        animation: slideInRight 0.3s ease-out;
+        box-shadow: var(--shadow-md);
+        transform: translateY(-2px);
+    }
+    
+    /* Enhanced metrics */
+    [data-testid="metric-container"] {
+        background: var(--surface-elevated);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: 1.5rem;
+        box-shadow: var(--shadow-sm);
+        transition: var(--transition);
+    }
+    
+    [data-testid="metric-container"]:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-md);
+        border-color: var(--primary);
+    }
+    
+    /* Enhanced alerts */
+    .stSuccess {
+        background: var(--success-gradient);
+        border-radius: var(--radius-lg);
+        border: none;
+        box-shadow: var(--shadow-md);
+        animation: slideInRight 0.5s ease-out;
+    }
+    
+    .stWarning {
+        background: var(--warning-gradient);
+        border-radius: var(--radius-lg);
+        border: none;
+        box-shadow: var(--shadow-md);
+        animation: slideInRight 0.5s ease-out;
+    }
+    
+    .stError {
+        background: var(--secondary-gradient);
+        border-radius: var(--radius-lg);
+        border: none;
+        box-shadow: var(--shadow-md);
+        animation: slideInRight 0.5s ease-out;
+    }
+    
+    .stInfo {
+        background: var(--primary-gradient);
+        border-radius: var(--radius-lg);
+        border: none;
+        box-shadow: var(--shadow-md);
+        animation: slideInRight 0.5s ease-out;
     }
     
     @keyframes slideInRight {
@@ -624,25 +400,32 @@ def load_css():
         to { transform: translateX(0); opacity: 1; }
     }
     
-    .trip-card {
-        background: white;
-        border-radius: 12px;
-        padding: 1.5rem;
-        border: 1px solid #e2e8f0;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        margin-bottom: 1rem;
-        transition: all 0.3s ease;
+    /* Typography improvements */
+    h1, h2, h3, h4, h5, h6 {
+        font-family: 'Space Grotesk', sans-serif !important;
+        color: var(--text-primary) !important;
+        font-weight: 600 !important;
+        line-height: 1.2 !important;
     }
     
-    .trip-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    p, div, span, label {
+        font-family: 'Inter', sans-serif !important;
+        color: var(--text-secondary) !important;
+        line-height: 1.6 !important;
+    }
+    
+    /* Mobile responsiveness */
+    @media (max-width: 768px) {
+        .app-header h1 { font-size: 2.5rem; }
+        .main .block-container { padding: 0.5rem; }
+        .card { padding: 1rem; }
+        .section-header { font-size: 2rem; }
     }
     </style>
     """, unsafe_allow_html=True)
 
 # ============================================================================
-# MAIN APPLICATION COMPONENTS (Enhanced with auto-save)
+# SESSION STATE INITIALIZATION (Fixed)
 # ============================================================================
 
 def init_session_state():
@@ -658,7 +441,8 @@ def init_session_state():
             'shopping_budget': 0.0,
             'misc_costs': 0.0,
             'emergency_budget': 0.0,
-            'insurance_cost': 0.0
+            'insurance_cost': 0.0,
+            'currency': 'GBP'
         }
     
     if 'trip_info' not in st.session_state:
@@ -668,29 +452,18 @@ def init_session_state():
             'end_date': None,
             'destinations': '',
             'travel_style': '🎒 Budget Backpacker (£25-40/day)',
-            'group_size': 1
+            'group_size': 1,
+            'transport_preference': '🚌 Bus',
+            'accommodation_preference': '🏠 Hostels'
         }
-    
-    if 'current_view' not in st.session_state:
-        st.session_state.current_view = 'trips'
 
-def show_auto_save_indicator():
-    """Show auto-save status"""
-    if st.session_state.get('auto_save_enabled', True):
-        if st.session_state.get('last_saved'):
-            st.sidebar.success(f"💾 Auto-saved at {st.session_state.last_saved}")
-        else:
-            st.sidebar.info("💾 Auto-save enabled")
+# ============================================================================
+# COMPONENT FUNCTIONS (Fixed and integrated)
+# ============================================================================
 
 def trip_overview():
-    """Enhanced trip overview with auto-save"""
-    st.markdown('<h2 style="text-align: center; color: #667eea;">🌍 Trip Overview</h2>', unsafe_allow_html=True)
-    
-    # Auto-save toggle
-    col1, col2 = st.columns([3, 1])
-    with col2:
-        auto_save = st.checkbox("Auto-save", value=st.session_state.get('auto_save_enabled', True))
-        st.session_state.auto_save_enabled = auto_save
+    """Enhanced trip overview component"""
+    st.markdown('<h2 class="section-header">🌍 Trip Overview</h2>', unsafe_allow_html=True)
     
     # Trip basic information
     st.markdown('<div class="card">', unsafe_allow_html=True)
@@ -790,7 +563,7 @@ def trip_overview():
     
     st.markdown('</div>', unsafe_allow_html=True)
     
-    # Save functionality with auto-save
+    # Save functionality
     col1, col2, col3 = st.columns([1, 2, 1])
     
     with col2:
@@ -809,9 +582,7 @@ def trip_overview():
             
             st.session_state.budget_data['total_budget'] = total_budget
             
-            # Save to database
-            if save_current_trip():
-                st.session_state.last_saved = datetime.now().strftime("%H:%M:%S")
+            st.success("✅ Trip overview saved! Ready to plan your adventure!")
             
             # Auto-suggest days and budget
             if start_date and end_date and end_date > start_date:
@@ -827,24 +598,10 @@ def trip_overview():
                     st.warning(f"💡 For a {suggested_days}-day {travel_style.split('(')[0].strip()}, consider budgeting £{suggested_budget:.0f}-£{suggested_budget*1.3:.0f}")
                 elif total_budget > suggested_budget * 1.5:
                     st.info(f"💰 Great budget! You have plenty of room for upgrades and spontaneous adventures!")
-    
-    # Auto-save functionality
-    if st.session_state.get('auto_save_enabled', True) and trip_name:
-        # Auto-save when user stops typing (triggered by any other interaction)
-        if trip_name != st.session_state.trip_info.get('name', ''):
-            st.session_state.trip_info.update({
-                'name': trip_name,
-                'start_date': start_date,
-                'end_date': end_date,
-                'destinations': destinations,
-                'travel_style': travel_style,
-                'group_size': group_size
-            })
-            st.session_state.budget_data['total_budget'] = total_budget
 
 def day_by_day_planning():
-    """Enhanced day-by-day planning with auto-save"""
-    st.markdown('<h2 style="text-align: center; color: #667eea;">📅 Day-by-Day Planning</h2>', unsafe_allow_html=True)
+    """Enhanced day-by-day planning with better UX"""
+    st.markdown('<h2 class="section-header">📅 Day-by-Day Planning</h2>', unsafe_allow_html=True)
     
     # Enhanced add days section
     st.markdown('<div class="card">', unsafe_allow_html=True)
@@ -861,16 +618,12 @@ def day_by_day_planning():
         if st.button(f"Add {days_to_add} Days"):
             for _ in range(int(days_to_add)):
                 add_new_day()
-            if st.session_state.get('auto_save_enabled', True):
-                save_current_trip()
             st.rerun()
     
     with col4:
         if st.session_state.trip_data and st.button("🗑️ Clear All", type="secondary"):
             if st.checkbox("Confirm clear all days"):
                 st.session_state.trip_data = []
-                if st.session_state.get('auto_save_enabled', True):
-                    save_current_trip()
                 st.rerun()
     
     st.markdown('</div>', unsafe_allow_html=True)
@@ -885,9 +638,11 @@ def day_by_day_planning():
         """, unsafe_allow_html=True)
         return
     
-    # Display days with enhanced UI and auto-save
+    # Display days with enhanced UI
     for i, day_data in enumerate(st.session_state.trip_data):
         day_cost = day_data.get('transport_cost', 0.0) + day_data.get('accommodation_cost', 0.0)
+        
+        # Enhanced expander with progress indicator
         completion = calculate_day_completion(day_data)
         progress_indicator = "🟢" if completion >= 0.8 else "🟡" if completion >= 0.4 else "🔴"
         
@@ -911,7 +666,7 @@ def day_by_day_planning():
             col1, col2 = st.columns(2)
             
             with col1:
-                st.markdown('<div style="background: linear-gradient(135deg, #e6f3ff 0%, #cce7ff 100%); padding: 1.5rem; border-radius: 12px; margin-bottom: 1rem;">', unsafe_allow_html=True)
+                st.markdown('<div class="transport-section">', unsafe_allow_html=True)
                 st.markdown("#### 🚌 Transportation")
                 
                 transport_type = st.selectbox(
@@ -958,7 +713,7 @@ def day_by_day_planning():
                 st.markdown('</div>', unsafe_allow_html=True)
                 
             with col2:
-                st.markdown('<div style="background: linear-gradient(135deg, #fff0f5 0%, #ffe4e8 100%); padding: 1.5rem; border-radius: 12px; margin-bottom: 1rem;">', unsafe_allow_html=True)
+                st.markdown('<div class="accommodation-section">', unsafe_allow_html=True)
                 st.markdown("#### 🏨 Accommodation")
                 
                 accommodation_type = st.selectbox(
@@ -1004,7 +759,7 @@ def day_by_day_planning():
             )
             
             # Enhanced action buttons
-            col1, col2, col3, col4, col5 = st.columns([1, 1, 1, 1, 2])
+            col1, col2, col3, col4 = st.columns([1, 1, 1, 2])
             with col1:
                 if st.button(f"🗑️ Delete", key=f"delete_{i}", type="secondary"):
                     delete_day(i)
@@ -1012,31 +767,13 @@ def day_by_day_planning():
                 if st.button(f"📋 Copy", key=f"copy_{i}"):
                     copy_day(i)
             with col3:
-                if i > 0 and st.button(f"⬆️ Up", key=f"move_up_{i}"):
+                if i > 0 and st.button(f"⬆️ Move Up", key=f"move_up_{i}"):
                     move_day_up(i)
             with col4:
-                if st.button(f"💾 Save", key=f"save_day_{i}"):
-                    update_day_data(i, {
-                        'date': str(date) if date else '',
-                        'location': location,
-                        'transport_type': transport_type,
-                        'transport_from': transport_from,
-                        'transport_to': transport_to,
-                        'transport_time': transport_time,
-                        'transport_cost': transport_cost,
-                        'accommodation_type': accommodation_type,
-                        'accommodation_name': accommodation_name,
-                        'accommodation_cost': accommodation_cost,
-                        'notes': notes
-                    })
-                    if st.session_state.get('auto_save_enabled', True):
-                        save_current_trip()
-                        st.success("Day saved!")
-            with col5:
                 completion_percentage = calculate_day_completion(day_data)
                 st.progress(completion_percentage, text=f"Completion: {completion_percentage:.0%}")
             
-            # Auto-update session state
+            # Update session state
             update_day_data(i, {
                 'date': str(date) if date else '',
                 'location': location,
@@ -1052,8 +789,8 @@ def day_by_day_planning():
             })
 
 def budget_calculator():
-    """Enhanced budget calculator with auto-save"""
-    st.markdown('<h2 style="text-align: center; color: #667eea;">💰 Budget Calculator</h2>', unsafe_allow_html=True)
+    """Enhanced budget calculator with visual insights"""
+    st.markdown('<h2 class="section-header">💰 Budget Calculator</h2>', unsafe_allow_html=True)
     
     if not st.session_state.trip_data:
         st.markdown("""
@@ -1068,7 +805,7 @@ def budget_calculator():
     total_transport = sum(day.get('transport_cost', 0.0) for day in st.session_state.trip_data)
     total_accommodation = sum(day.get('accommodation_cost', 0.0) for day in st.session_state.trip_data)
     
-    # Enhanced budget categories with auto-save
+    # Enhanced budget categories
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.subheader("💳 Additional Budget Categories")
     
@@ -1077,44 +814,35 @@ def budget_calculator():
     with col1:
         st.markdown("**🍽️ Daily Expenses**")
         food_budget = st.number_input("Food & Drink (£)", min_value=0.0, 
-                                    value=st.session_state.budget_data.get('food_budget', 0.0), step=5.0,
-                                    key="food_budget")
+                                    value=st.session_state.budget_data.get('food_budget', 0.0), step=5.0)
         activities_budget = st.number_input("Activities & Attractions (£)", min_value=0.0, 
-                                          value=st.session_state.budget_data.get('activities_budget', 0.0), step=5.0,
-                                          key="activities_budget")
+                                          value=st.session_state.budget_data.get('activities_budget', 0.0), step=5.0)
         
     with col2:
         st.markdown("**🛍️ Shopping & Extras**")
         shopping_budget = st.number_input("Shopping & Souvenirs (£)", min_value=0.0, 
-                                        value=st.session_state.budget_data.get('shopping_budget', 0.0), step=5.0,
-                                        key="shopping_budget")
+                                        value=st.session_state.budget_data.get('shopping_budget', 0.0), step=5.0)
         misc_costs = st.number_input("Miscellaneous (£)", min_value=0.0, 
-                                   value=st.session_state.budget_data.get('misc_costs', 0.0), step=5.0,
-                                   key="misc_costs")
+                                   value=st.session_state.budget_data.get('misc_costs', 0.0), step=5.0)
     
     with col3:
         st.markdown("**🛡️ Safety & Security**")
         emergency_budget = st.number_input("Emergency Fund (£)", min_value=0.0, 
-                                         value=st.session_state.budget_data.get('emergency_budget', 0.0), step=10.0,
-                                         key="emergency_budget")
+                                         value=st.session_state.budget_data.get('emergency_budget', 0.0), step=10.0)
         insurance_cost = st.number_input("Travel Insurance (£)", min_value=0.0, 
-                                       value=st.session_state.budget_data.get('insurance_cost', 0.0), step=5.0,
-                                       key="insurance_cost")
-    
-    # Auto-save budget changes
-    if st.button("💾 Save Budget", type="primary"):
-        st.session_state.budget_data.update({
-            'food_budget': food_budget,
-            'activities_budget': activities_budget,
-            'shopping_budget': shopping_budget,
-            'misc_costs': misc_costs,
-            'emergency_budget': emergency_budget,
-            'insurance_cost': insurance_cost
-        })
-        if save_current_trip():
-            st.session_state.last_saved = datetime.now().strftime("%H:%M:%S")
+                                       value=st.session_state.budget_data.get('insurance_cost', 0.0), step=5.0)
     
     st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Save additional budget data
+    st.session_state.budget_data.update({
+        'food_budget': food_budget,
+        'activities_budget': activities_budget,
+        'shopping_budget': shopping_budget,
+        'misc_costs': misc_costs,
+        'emergency_budget': emergency_budget,
+        'insurance_cost': insurance_cost
+    })
     
     # Calculate totals
     additional_costs = food_budget + activities_budget + shopping_budget + emergency_budget + insurance_cost + misc_costs
@@ -1204,9 +932,313 @@ def budget_calculator():
             )
             st.plotly_chart(fig, use_container_width=True)
 
+def analytics_dashboard():
+    """Analytics dashboard for trip insights"""
+    st.markdown('<h2 class="section-header">📊 Trip Analytics</h2>', unsafe_allow_html=True)
+    
+    if not st.session_state.trip_data:
+        st.markdown("""
+        <div class="card" style="text-align: center; padding: 4rem 2rem;">
+            <h3>📊 No data to analyze yet!</h3>
+            <p style="font-size: 1.1rem;">Add your trip details first to see amazing insights!</p>
+        </div>
+        """, unsafe_allow_html=True)
+        return
+    
+    # Trip completion analysis
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.subheader("🎯 Trip Completion Status")
+    
+    completed_days = sum(1 for day in st.session_state.trip_data if calculate_day_completion(day) >= 0.8)
+    total_days = len(st.session_state.trip_data)
+    completion_rate = completed_days / total_days if total_days > 0 else 0
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("🏁 Completed Days", f"{completed_days}/{total_days}")
+    with col2:
+        st.metric("📈 Completion Rate", f"{completion_rate:.1%}")
+    with col3:
+        missing_locations = sum(1 for day in st.session_state.trip_data if not day.get('location'))
+        st.metric("📍 Missing Locations", missing_locations)
+    with col4:
+        missing_transport = sum(1 for day in st.session_state.trip_data if not day.get('transport_from'))
+        st.metric("🚌 Missing Transport", missing_transport)
+    
+    # Progress bar
+    st.progress(completion_rate, text=f"Overall Trip Planning: {completion_rate:.1%}")
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Transport and accommodation analysis
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.subheader("🚌 Transport Analysis")
+        
+        transport_stats = {}
+        for day in st.session_state.trip_data:
+            transport = day.get('transport_type', 'Unknown')
+            transport_stats[transport] = transport_stats.get(transport, 0) + 1
+        
+        if transport_stats:
+            fig = px.bar(
+                x=list(transport_stats.keys()),
+                y=list(transport_stats.values()),
+                title="Transport Usage",
+                labels={'x': 'Transport Type', 'y': 'Number of Days'},
+                color=list(transport_stats.values()),
+                color_continuous_scale='Blues'
+            )
+            fig.update_layout(
+                font=dict(family="Inter, sans-serif"),
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                showlegend=False
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.subheader("🏨 Accommodation Analysis")
+        
+        accommodation_stats = {}
+        for day in st.session_state.trip_data:
+            accommodation = day.get('accommodation_type', 'Unknown')
+            accommodation_stats[accommodation] = accommodation_stats.get(accommodation, 0) + 1
+        
+        if accommodation_stats:
+            fig = px.pie(
+                values=list(accommodation_stats.values()),
+                names=list(accommodation_stats.keys()),
+                title="Accommodation Distribution",
+                color_discrete_sequence=px.colors.qualitative.Pastel
+            )
+            fig.update_layout(
+                font=dict(family="Inter, sans-serif"),
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)'
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Cost trend analysis
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.subheader("💰 Cost Trend Analysis")
+    
+    df = pd.DataFrame(st.session_state.trip_data)
+    if not df.empty:
+        df['total_cost'] = df['transport_cost'].astype(float) + df['accommodation_cost'].astype(float)
+        df['cumulative_cost'] = df['total_cost'].cumsum()
+        
+        fig = make_subplots(
+            rows=2, cols=1,
+            subplot_titles=('Daily Costs', 'Cumulative Spending'),
+            vertical_spacing=0.1
+        )
+        
+        # Daily costs
+        fig.add_trace(
+            go.Scatter(x=df['day'], y=df['total_cost'], mode='lines+markers', 
+                      name='Daily Cost', line=dict(color='#667eea', width=3)),
+            row=1, col=1
+        )
+        
+        # Cumulative costs
+        fig.add_trace(
+            go.Scatter(x=df['day'], y=df['cumulative_cost'], mode='lines+markers',
+                      name='Cumulative Cost', line=dict(color='#f5576c', width=3)),
+            row=2, col=1
+        )
+        
+        fig.update_layout(
+            height=500,
+            font=dict(family="Inter, sans-serif"),
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            showlegend=False
+        )
+        
+        fig.update_xaxes(title_text="Day", row=2, col=1)
+        fig.update_yaxes(title_text="Cost (£)", row=1, col=1)
+        fig.update_yaxes(title_text="Cumulative Cost (£)", row=2, col=1)
+        
+        st.plotly_chart(fig, use_container_width=True)
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+
+def trip_summary():
+    """Enhanced trip summary with better presentation"""
+    st.markdown('<h2 class="section-header">📋 Trip Summary</h2>', unsafe_allow_html=True)
+    
+    if not st.session_state.trip_data:
+        st.markdown("""
+        <div class="card" style="text-align: center; padding: 4rem 2rem;">
+            <h3>📋 No trip data yet!</h3>
+            <p style="font-size: 1.1rem;">Start planning in the Day-by-Day section, then come back for your summary!</p>
+        </div>
+        """, unsafe_allow_html=True)
+        return
+    
+    # Enhanced trip header
+    trip_name = st.session_state.trip_info.get('name', 'My Adventure')
+    start_date = st.session_state.trip_info.get('start_date')
+    end_date = st.session_state.trip_info.get('end_date')
+    
+    st.markdown(f"""
+    <div style="background: var(--primary-gradient); 
+                color: white; padding: 3rem 2rem; border-radius: var(--radius-xl); 
+                text-align: center; margin-bottom: 2rem; box-shadow: var(--shadow-xl);">
+        <h1 style="margin: 0; font-family: 'Space Grotesk', sans-serif; font-size: 3rem;">🎒 {trip_name}</h1>
+        <p style="margin: 1rem 0 0 0; opacity: 0.95; font-size: 1.3rem;">Your amazing adventure awaits!</p>
+        {f'<p style="margin: 0.5rem 0 0 0; opacity: 0.8;">{start_date} → {end_date}</p>' if start_date and end_date else ''}
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Enhanced statistics
+    show_enhanced_stats()
+    
+    # Detailed itinerary with enhanced presentation
+    st.subheader("🗓️ Your Detailed Itinerary")
+    
+    for i, day in enumerate(st.session_state.trip_data):
+        day_cost = day.get('transport_cost', 0.0) + day.get('accommodation_cost', 0.0)
+        
+        # Enhanced day card
+        st.markdown(f"""
+        <div class="card" style="margin-bottom: 1.5rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h3 style="margin: 0; color: var(--primary);">📍 Day {day['day']} - {day.get('location', 'TBD')}</h3>
+                <span style="background: var(--primary-gradient); color: white; padding: 0.5rem 1rem; border-radius: 20px; font-weight: 600;">£{day_cost:.2f}</span>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        if day.get('date'):
+            st.markdown(f"**📅 Date:** {day['date']}")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("**🚌 Transportation:**")
+            if day.get('transport_from') and day.get('transport_to'):
+                st.write(f"• **Route:** {day['transport_from']} → {day['transport_to']}")
+                st.write(f"• **Mode:** {day.get('transport_type', 'TBD')}")
+                if day.get('transport_time'):
+                    st.write(f"• **Departure:** {day['transport_time']}")
+                st.write(f"• **Cost:** £{day.get('transport_cost', 0):.2f}")
+            else:
+                st.write("• Transport details to be added")
+                
+        with col2:
+            st.markdown("**🏨 Accommodation:**")
+            acc_type = day.get('accommodation_type', 'TBD')
+            if acc_type in ["Bus (sleeping)", "Train (sleeping)"]:
+                st.write(f"• **Sleeping on:** {acc_type}")
+                st.write("• **Cost:** Included in transport")
+            elif acc_type == "None (transit day)":
+                st.write("• **Transit day** - on the move!")
+            elif day.get('accommodation_name'):
+                st.write(f"• **Type:** {acc_type}")
+                st.write(f"• **Place:** {day['accommodation_name']}")
+                st.write(f"• **Cost:** £{day.get('accommodation_cost', 0):.2f}")
+            else:
+                st.write("• Accommodation to be booked")
+        
+        if day.get('notes'):
+            st.markdown(f"**📝 Plans & Notes:** {day['notes']}")
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Enhanced export functionality
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.subheader("📤 Share Your Adventure")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        if st.button("📁 Download CSV", type="primary", use_container_width=True):
+            df = pd.DataFrame(st.session_state.trip_data)
+            csv = df.to_csv(index=False)
+            st.download_button(
+                label="💾 Download Trip Data",
+                data=csv,
+                file_name=f"{trip_name.replace(' ', '_')}_adventure.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
+    
+    with col2:
+        if st.button("📋 Generate Text Summary", use_container_width=True):
+            itinerary_text = generate_enhanced_text_itinerary()
+            st.text_area("Copy this itinerary:", value=itinerary_text, height=200)
+            st.success("✅ Perfect for sharing or keeping as backup!")
+    
+    with col3:
+        if st.button("📊 Detailed Stats", use_container_width=True):
+            show_detailed_statistics()
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+
 # ============================================================================
-# UTILITY FUNCTIONS (Enhanced)
+# UTILITY FUNCTIONS (Fixed)
 # ============================================================================
+
+def show_enhanced_stats():
+    """Display enhanced trip statistics with animations"""
+    if not st.session_state.trip_data:
+        return
+        
+    total_days = len(st.session_state.trip_data)
+    total_transport = sum(day.get('transport_cost', 0.0) for day in st.session_state.trip_data)
+    total_accommodation = sum(day.get('accommodation_cost', 0.0) for day in st.session_state.trip_data)
+    total_cost = total_transport + total_accommodation
+    budget = st.session_state.budget_data['total_budget']
+    remaining = budget - total_cost
+    
+    st.markdown("""
+    <div style="background: var(--surface); padding: 2rem; border-radius: var(--radius-lg); 
+                border: 1px solid var(--border); margin-bottom: 2rem; box-shadow: var(--shadow-md);">
+        <h3 style="text-align: center; margin-bottom: 2rem; font-family: 'Space Grotesk', sans-serif;">
+            📊 Your Adventure at a Glance
+        </h3>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col1, col2, col3, col4, col5 = st.columns(5)
+    
+    with col1:
+        st.metric(
+            "📅 Duration", 
+            f"{total_days} days",
+            delta=f"{total_days/7:.1f} weeks" if total_days > 7 else None
+        )
+    with col2:
+        st.metric(
+            "🚌 Transport", 
+            f"£{total_transport:.0f}",
+            delta=f"{total_transport/total_days:.0f}/day" if total_days > 0 else None
+        )
+    with col3:
+        st.metric(
+            "🏨 Accommodation", 
+            f"£{total_accommodation:.0f}",
+            delta=f"{total_accommodation/total_days:.0f}/day" if total_days > 0 else None
+        )
+    with col4:
+        st.metric(
+            "💰 Total Cost", 
+            f"£{total_cost:.0f}",
+            delta=f"{(total_cost/budget*100):.1f}% of budget"
+        )
+    with col5:
+        st.metric(
+            "💸 Remaining", 
+            f"£{remaining:.0f}",
+            delta="Over budget!" if remaining < 0 else "Within budget",
+            delta_color="inverse" if remaining < 0 else "normal"
+        )
 
 def add_new_day():
     """Add a new day with enhanced defaults"""
@@ -1225,43 +1257,31 @@ def add_new_day():
         'notes': ''
     }
     st.session_state.trip_data.append(new_day)
-    # Auto-save if enabled
-    if st.session_state.get('auto_save_enabled', True):
-        save_current_trip()
     st.rerun()
 
 def delete_day(index):
-    """Delete a day and renumber with auto-save"""
+    """Delete a day and renumber"""
     st.session_state.trip_data.pop(index)
     for j, remaining_day in enumerate(st.session_state.trip_data):
         remaining_day['day'] = j + 1
-    # Auto-save if enabled
-    if st.session_state.get('auto_save_enabled', True):
-        save_current_trip()
     st.rerun()
 
 def copy_day(index):
-    """Copy a day with incremented day number and auto-save"""
+    """Copy a day with incremented day number"""
     original_day = st.session_state.trip_data[index].copy()
     original_day['day'] = len(st.session_state.trip_data) + 1
     original_day['date'] = ''
     st.session_state.trip_data.append(original_day)
-    # Auto-save if enabled
-    if st.session_state.get('auto_save_enabled', True):
-        save_current_trip()
     st.rerun()
 
 def move_day_up(index):
-    """Move day up in the list with auto-save"""
+    """Move day up in the list"""
     if index > 0:
         st.session_state.trip_data[index], st.session_state.trip_data[index-1] = \
             st.session_state.trip_data[index-1], st.session_state.trip_data[index]
         # Renumber days
         for j, day in enumerate(st.session_state.trip_data):
             day['day'] = j + 1
-        # Auto-save if enabled
-        if st.session_state.get('auto_save_enabled', True):
-            save_current_trip()
         st.rerun()
 
 def update_day_data(index, data):
@@ -1287,134 +1307,159 @@ def get_accommodation_index(accommodation_type):
     except ValueError:
         return 0
 
+def generate_enhanced_text_itinerary():
+    """Generate an enhanced text version of the itinerary"""
+    trip_name = st.session_state.trip_info.get('name', 'My Adventure')
+    start_date = st.session_state.trip_info.get('start_date', '')
+    end_date = st.session_state.trip_info.get('end_date', '')
+    
+    text = f"🎒 {trip_name}\n{'='*len(trip_name)+4}\n"
+    if start_date and end_date:
+        text += f"📅 {start_date} → {end_date}\n"
+    text += f"🌍 {len(st.session_state.trip_data)} days of adventure\n\n"
+    
+    total_cost = 0
+    for day in st.session_state.trip_data:
+        day_cost = day.get('transport_cost', 0) + day.get('accommodation_cost', 0)
+        total_cost += day_cost
+        
+        text += f"📍 Day {day['day']} - {day.get('location', 'TBD')}\n"
+        text += f"📅 Date: {day.get('date', 'TBD')}\n"
+        text += f"🚌 Transport: {day.get('transport_type', 'TBD')} from {day.get('transport_from', 'TBD')} to {day.get('transport_to', 'TBD')}\n"
+        
+        if day.get('transport_time'):
+            text += f"⏰ Departure: {day['transport_time']}\n"
+            
+        text += f"🏨 Accommodation: {day.get('accommodation_type', 'TBD')}"
+        if day.get('accommodation_name'):
+            text += f" - {day['accommodation_name']}"
+        text += "\n"
+        
+        if day.get('notes'):
+            text += f"📝 Notes: {day['notes']}\n"
+        text += f"💰 Daily Cost: £{day_cost:.2f}\n"
+        text += "-" * 50 + "\n\n"
+    
+    text += f"💰 Total Trip Cost: £{total_cost:.2f}\n"
+    text += f"🎒 Total Days: {len(st.session_state.trip_data)}\n"
+    text += f"📊 Average Daily Cost: £{total_cost/len(st.session_state.trip_data):.2f}\n\n"
+    text += "🌟 Have an amazing adventure! Safe travels! 🎒"
+    
+    return text
+
+def show_detailed_statistics():
+    """Show enhanced detailed trip statistics"""
+    if not st.session_state.trip_data:
+        return
+    
+    st.subheader("📊 Your Adventure Statistics")
+    
+    # Transport statistics
+    transport_counts = {}
+    transport_costs = {}
+    for day in st.session_state.trip_data:
+        transport = day.get('transport_type', 'Unknown')
+        transport_counts[transport] = transport_counts.get(transport, 0) + 1
+        transport_costs[transport] = transport_costs.get(transport, 0) + day.get('transport_cost', 0)
+    
+    # Accommodation statistics
+    accommodation_counts = {}
+    accommodation_costs = {}
+    for day in st.session_state.trip_data:
+        accommodation = day.get('accommodation_type', 'Unknown')
+        accommodation_counts[accommodation] = accommodation_counts.get(accommodation, 0) + 1
+        accommodation_costs[accommodation] = accommodation_costs.get(accommodation, 0) + day.get('accommodation_cost', 0)
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("**🚌 Transportation Breakdown:**")
+        for transport, count in transport_counts.items():
+            cost = transport_costs.get(transport, 0)
+            emoji = get_transport_emoji(transport)
+            st.write(f"{emoji} {transport}: {count} journey{'s' if count != 1 else ''} (£{cost:.2f})")
+    
+    with col2:
+        st.markdown("**🏨 Accommodation Breakdown:**")
+        for accommodation, count in accommodation_counts.items():
+            cost = accommodation_costs.get(accommodation, 0)
+            emoji = get_accommodation_emoji(accommodation)
+            st.write(f"{emoji} {accommodation}: {count} night{'s' if count != 1 else ''} (£{cost:.2f})")
+    
+    # Enhanced cost analysis
+    st.markdown("**💰 Detailed Cost Analysis:**")
+    total_transport = sum(day.get('transport_cost', 0.0) for day in st.session_state.trip_data)
+    total_accommodation = sum(day.get('accommodation_cost', 0.0) for day in st.session_state.trip_data)
+    total_cost = total_transport + total_accommodation
+    
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("🚌 Total Transport", f"£{total_transport:.2f}")
+    with col2:
+        st.metric("🏨 Total Accommodation", f"£{total_accommodation:.2f}")
+    with col3:
+        avg_daily = total_cost / len(st.session_state.trip_data) if st.session_state.trip_data else 0
+        st.metric("📊 Avg Daily Cost", f"£{avg_daily:.2f}")
+    with col4:
+        budget_used = (total_cost / st.session_state.budget_data['total_budget'] * 100) if st.session_state.budget_data['total_budget'] > 0 else 0
+        st.metric("📈 Budget Used", f"{budget_used:.1f}%")
+
 # ============================================================================
 # MAIN APPLICATION
 # ============================================================================
 
 def main():
-
-def main():
-    """Main application entry point"""
+    """Main application function"""
+    # Initialize session state
     init_session_state()
     
-    # Check authentication
-    if 'user' not in st.session_state:
-        show_login_page()
-        return
+    # Load CSS
+    load_css()
     
-    # Show user menu
-    st.sidebar.markdown("---")
-    st.sidebar.markdown(f"👤 **{st.session_state.user['username']}**")
+    # Enhanced header with animation
+    st.markdown("""
+    <div class="app-header">
+        <h1>🎒 Adventure Planner</h1>
+        <p>Plan your perfect backpacking journey with style and precision</p>
+    </div>
+    """, unsafe_allow_html=True)
     
-    if st.sidebar.button("🚪 Logout"):
-        for key in list(st.session_state.keys()):
-            del st.session_state[key]
-        st.rerun()
+    # Quick stats if trip data exists
+    if st.session_state.trip_data:
+        show_enhanced_stats()
     
-    # Main application logic
-    if st.session_state.current_view == 'trips':
-        show_trip_manager()
-        
-    elif st.session_state.current_view == 'planning':
-        # Navigation buttons
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col1:
-            if st.button("⬅️ Back to Trips"):
-                st.session_state.current_view = 'trips'
-                st.rerun()
-        with col3:
-            if st.button("💾 Save & Back"):
-                if save_current_trip():
-                    st.session_state.current_view = 'trips'
-                    st.rerun()
-        
-        # Main planning interface
-        tab1, tab2, tab3, tab4 = st.tabs([
-            "🌍 Trip Overview", 
-            "📅 Day Planning", 
-            "💰 Budget Calculator", 
-            "📊 Analytics"
-        ])
-        
-        with tab1:
-            trip_overview()
-        
-        with tab2:
-            day_by_day_planning()
-        
-        with tab3:
-            budget_calculator()
-        
-        with tab4:
-            if st.session_state.trip_data:
-                st.markdown('<h2 style="text-align: center; color: #667eea;">📊 Trip Analytics</h2>', unsafe_allow_html=True)
-                
-                # Quick analytics
-                total_days = len(st.session_state.trip_data)
-                total_cost = sum(day.get('transport_cost', 0) + day.get('accommodation_cost', 0) for day in st.session_state.trip_data)
-                completed_days = sum(1 for day in st.session_state.trip_data if calculate_day_completion(day) >= 0.8)
-                completion_rate = completed_days / total_days if total_days > 0 else 0
-                
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    st.metric("📅 Total Days", total_days)
-                with col2:
-                    st.metric("💰 Total Cost", f"£{total_cost:.0f}")
-                with col3:
-                    st.metric("✅ Completed", f"{completed_days}/{total_days}")
-                with col4:
-                    st.metric("📈 Progress", f"{completion_rate:.1%}")
-                
-                # Progress bar
-                st.progress(completion_rate, text=f"Trip Planning Progress: {completion_rate:.1%}")
-                
-                # Transport analysis
-                if st.session_state.trip_data:
-                    transport_stats = {}
-                    for day in st.session_state.trip_data:
-                        transport = day.get('transport_type', 'Unknown')
-                        transport_stats[transport] = transport_stats.get(transport, 0) + 1
-                    
-                    if transport_stats:
-                        col1, col2 = st.columns(2)
-                        
-                        with col1:
-                            fig = px.bar(
-                                x=list(transport_stats.keys()),
-                                y=list(transport_stats.values()),
-                                title="🚌 Transport Usage",
-                                labels={'x': 'Transport Type', 'y': 'Days'},
-                                color=list(transport_stats.values()),
-                                color_continuous_scale='Blues'
-                            )
-                            fig.update_layout(showlegend=False)
-                            st.plotly_chart(fig, use_container_width=True)
-                        
-                        with col2:
-                            # Cost breakdown
-                            daily_costs = [day.get('transport_cost', 0) + day.get('accommodation_cost', 0) 
-                                         for day in st.session_state.trip_data]
-                            
-                            fig = px.line(
-                                x=list(range(1, len(daily_costs) + 1)),
-                                y=daily_costs,
-                                title="💰 Daily Cost Trend",
-                                labels={'x': 'Day', 'y': 'Cost (£)'},
-                                markers=True
-                            )
-                            fig.update_traces(line_color='#f5576c', line_width=3)
-                            st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.info("Add some days to your trip to see analytics!")
+    # Enhanced navigation tabs
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "🌍 Trip Overview", 
+        "📅 Day-by-Day Planning", 
+        "💰 Budget Calculator", 
+        "📊 Analytics", 
+        "📋 Trip Summary"
+    ])
+    
+    with tab1:
+        trip_overview()
+    
+    with tab2:
+        day_by_day_planning()
+    
+    with tab3:
+        budget_calculator()
+    
+    with tab4:
+        analytics_dashboard()
+    
+    with tab5:
+        trip_summary()
     
     # Enhanced footer
     st.markdown("""
-    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                color: white; text-align: center; padding: 2rem; 
-                border-radius: 16px; margin-top: 3rem; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);">
-        <p style="margin: 0; font-size: 1.1rem;">🎒 Your adventures are safely stored and ready anytime!</p>
-        <p style="opacity: 0.8; font-size: 0.9rem; margin-top: 0.5rem;">
-            Plan • Save • Explore • Adventure
+    <div style="background: var(--primary-gradient); color: white; text-align: center; 
+                padding: 3rem 2rem; border-radius: var(--radius-xl); margin-top: 4rem; 
+                box-shadow: var(--shadow-xl); position: relative; overflow: hidden;">
+        <p style="margin: 0; font-size: 1.2rem;">🎒 Crafted with ❤️ for adventurers worldwide | Safe travels! 🌟</p>
+        <p style="opacity: 0.8; font-size: 0.9rem; margin-top: 1rem;">
+            Plan • Explore • Adventure • Repeat
         </p>
     </div>
     """, unsafe_allow_html=True)
