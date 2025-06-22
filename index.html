@@ -1,0 +1,1252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎒 Adventure Planner</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            padding: 1rem;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 3rem 2rem;
+            border-radius: 16px;
+            text-align: center;
+            margin-bottom: 2rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            font-size: 3rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+
+        .local-storage-info {
+            background: linear-gradient(135deg, #e8f5e8 0%, #d4edda 100%);
+            border: 2px solid #28a745;
+            border-radius: 12px;
+            padding: 1rem;
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+        }
+
+        .section-title {
+            font-size: 2rem;
+            font-weight: 600;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 1.5rem;
+            text-align: center;
+        }
+
+        .tabs {
+            display: flex;
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 0.5rem;
+            margin-bottom: 2rem;
+            overflow-x: auto;
+        }
+
+        .tab {
+            padding: 1rem 2rem;
+            border: none;
+            background: transparent;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+            font-weight: 500;
+        }
+
+        .tab.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 0.25rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .row {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .col {
+            flex: 1;
+            min-width: 250px;
+        }
+
+        .day-card {
+            background: #f8f9fa;
+            border: 2px solid #dee2e6;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .day-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .day-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .day-cost {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-weight: 600;
+        }
+
+        .transport-section {
+            background: linear-gradient(135deg, #e6f3ff 0%, #cce7ff 100%);
+            border: 2px solid #b3d9ff;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .accommodation-section {
+            background: linear-gradient(135deg, #fff0f5 0%, #ffe4e8 100%);
+            border: 2px solid #ffb3c1;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #667eea;
+        }
+
+        .stat-label {
+            color: #6c757d;
+            margin-top: 0.5rem;
+        }
+
+        .alert {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+
+        .alert-warning {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+        }
+
+        .alert-error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+
+        .progress-bar {
+            background: #e9ecef;
+            border-radius: 4px;
+            height: 8px;
+            overflow: hidden;
+            margin-top: 0.5rem;
+        }
+
+        .progress-fill {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100%;
+            transition: width 0.3s ease;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .row {
+                flex-direction: column;
+            }
+            
+            .tabs {
+                flex-direction: column;
+            }
+            
+            .tab {
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🎒 Adventure Planner</h1>
+            <p>Plan your perfect backpacking journey - saved locally on your computer!</p>
+        </div>
+
+        <!-- Local Storage Info -->
+        <div class="local-storage-info">
+            <h4>💾 Your Data is Saved Locally</h4>
+            <p>All your trip planning data is saved directly on your computer. It's private, secure, and will persist between sessions!</p>
+        </div>
+
+        <!-- Stats Overview -->
+        <div id="statsOverview" class="stats-grid" style="display: none;">
+            <div class="stat-card">
+                <div class="stat-value" id="totalDays">0</div>
+                <div class="stat-label">📅 Total Days</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="totalTransport">£0</div>
+                <div class="stat-label">🚌 Transport</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="totalAccommodation">£0</div>
+                <div class="stat-label">🏨 Accommodation</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="totalCost">£0</div>
+                <div class="stat-label">💰 Total Cost</div>
+            </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('overview')">🌍 Trip Overview</button>
+            <button class="tab" onclick="showTab('planning')">📅 Day Planning</button>
+            <button class="tab" onclick="showTab('budget')">💰 Budget</button>
+            <button class="tab" onclick="showTab('analytics')">📊 Analytics</button>
+            <button class="tab" onclick="showTab('summary')">📋 Summary</button>
+        </div>
+
+        <!-- Trip Overview Tab -->
+        <div id="overview" class="tab-content active">
+            <div class="card">
+                <h2 class="section-title">🌍 Trip Overview</h2>
+                
+                <div class="row">
+                    <div class="col">
+                        <div class="form-group">
+                            <label for="tripName">🎯 Trip Name</label>
+                            <input type="text" id="tripName" placeholder="e.g., European Adventure">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="startDate">📅 Start Date</label>
+                            <input type="date" id="startDate">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="endDate">🏁 End Date</label>
+                            <input type="date" id="endDate">
+                        </div>
+                    </div>
+                    
+                    <div class="col">
+                        <div class="form-group">
+                            <label for="destinations">🗺️ Main Destinations</label>
+                            <textarea id="destinations" rows="4" placeholder="List your must-visit places..."></textarea>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="totalBudget">💰 Total Budget (£)</label>
+                            <input type="number" id="totalBudget" min="0" step="100" value="1000">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col">
+                        <div class="form-group">
+                            <label for="travelStyle">✈️ Travel Style</label>
+                            <select id="travelStyle">
+                                <option>🎒 Budget Backpacker (£25-40/day)</option>
+                                <option>🌟 Mid-range Explorer (£40-70/day)</option>
+                                <option>💎 Comfort Traveller (£70+/day)</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="col">
+                        <div class="form-group">
+                            <label for="groupSize">👥 Group Size</label>
+                            <input type="number" id="groupSize" min="1" max="20" value="1">
+                        </div>
+                    </div>
+                    
+                    <div class="col">
+                        <div class="form-group">
+                            <label for="transportPref">🚌 Preferred Transport</label>
+                            <select id="transportPref">
+                                <option>🚌 Bus</option>
+                                <option>🚂 Train</option>
+                                <option>🔄 Mix of Both</option>
+                                <option>✈️ Airlines</option>
+                                <option>🚗 Car Rental</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="col">
+                        <div class="form-group">
+                            <label for="accommodationPref">🏨 Accommodation Style</label>
+                            <select id="accommodationPref">
+                                <option>🏠 Hostels</option>
+                                <option>🏨 Hotels</option>
+                                <option>🏡 Mix of Both</option>
+                                <option>⛺ Camping</option>
+                                <option>🏘️ Local Stays</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <button class="btn btn-primary" onclick="saveTripOverview()">💾 Save Trip Overview</button>
+            </div>
+        </div>
+
+        <!-- Day Planning Tab -->
+        <div id="planning" class="tab-content">
+            <div class="card">
+                <h2 class="section-title">📅 Day-by-Day Planning</h2>
+                
+                <div class="row" style="margin-bottom: 2rem;">
+                    <div class="col">
+                        <button class="btn btn-primary" onclick="addNewDay()">➕ Add New Day</button>
+                        <button class="btn btn-secondary" onclick="addMultipleDays()">📅 Add Multiple Days</button>
+                        <input type="number" id="daysToAdd" min="1" max="10" value="1" style="width: 80px; margin-left: 0.5rem;">
+                    </div>
+                    <div class="col" style="text-align: right;">
+                        <button class="btn btn-danger" onclick="clearAllDays()">🗑️ Clear All Days</button>
+                    </div>
+                </div>
+                
+                <div id="daysList">
+                    <!-- Days will be dynamically added here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Budget Tab -->
+        <div id="budget" class="tab-content">
+            <div class="card">
+                <h2 class="section-title">💰 Budget Calculator</h2>
+                
+                <div class="row">
+                    <div class="col">
+                        <h3>🍽️ Daily Expenses</h3>
+                        <div class="form-group">
+                            <label for="foodBudget">Food & Drink (£)</label>
+                            <input type="number" id="foodBudget" min="0" step="5" value="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="activitiesBudget">Activities (£)</label>
+                            <input type="number" id="activitiesBudget" min="0" step="5" value="0">
+                        </div>
+                    </div>
+                    
+                    <div class="col">
+                        <h3>🛍️ Shopping & Extras</h3>
+                        <div class="form-group">
+                            <label for="shoppingBudget">Shopping (£)</label>
+                            <input type="number" id="shoppingBudget" min="0" step="5" value="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="miscBudget">Miscellaneous (£)</label>
+                            <input type="number" id="miscBudget" min="0" step="5" value="0">
+                        </div>
+                    </div>
+                    
+                    <div class="col">
+                        <h3>🛡️ Safety & Security</h3>
+                        <div class="form-group">
+                            <label for="emergencyBudget">Emergency Fund (£)</label>
+                            <input type="number" id="emergencyBudget" min="0" step="10" value="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="insuranceBudget">Insurance (£)</label>
+                            <input type="number" id="insuranceBudget" min="0" step="5" value="0">
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="budgetOverview" class="stats-grid">
+                    <!-- Budget stats will be populated here -->
+                </div>
+                
+                <div id="budgetStatus"></div>
+            </div>
+        </div>
+
+        <!-- Analytics Tab -->
+        <div id="analytics" class="tab-content">
+            <div class="card">
+                <h2 class="section-title">📊 Trip Analytics</h2>
+                <div id="analyticsContent">
+                    <p style="text-align: center; color: #6c757d;">Add trip data to see analytics!</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Summary Tab -->
+        <div id="summary" class="tab-content">
+            <div class="card">
+                <h2 class="section-title">📋 Trip Summary</h2>
+                <div id="summaryContent">
+                    <p style="text-align: center; color: #6c757d;">Complete your trip planning to see the summary!</p>
+                </div>
+                
+                <div style="margin-top: 2rem; text-align: center;">
+                    <button class="btn btn-primary" onclick="exportToCSV()">📁 Download CSV</button>
+                    <button class="btn btn-secondary" onclick="generateTextSummary()">📋 Generate Text Summary</button>
+                    <button class="btn btn-danger" onclick="clearAllData()">🗑️ Clear All Data</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let tripData = [];
+        let budgetData = {
+            totalBudget: 1000,
+            foodBudget: 0,
+            activitiesBudget: 0,
+            shoppingBudget: 0,
+            miscBudget: 0,
+            emergencyBudget: 0,
+            insuranceBudget: 0
+        };
+        let tripInfo = {};
+
+        // Initialize app
+        window.addEventListener('DOMContentLoaded', function() {
+            loadFromLocalStorage();
+            updateUI();
+            setupEventListeners();
+        });
+
+        // Local Storage Functions
+        function saveToLocalStorage() {
+            const data = {
+                tripData: tripData,
+                budgetData: budgetData,
+                tripInfo: tripInfo,
+                lastSaved: new Date().toISOString()
+            };
+            localStorage.setItem('adventurePlannerData', JSON.stringify(data));
+        }
+
+        function loadFromLocalStorage() {
+            const saved = localStorage.getItem('adventurePlannerData');
+            if (saved) {
+                try {
+                    const data = JSON.parse(saved);
+                    tripData = data.tripData || [];
+                    budgetData = data.budgetData || budgetData;
+                    tripInfo = data.tripInfo || {};
+                    
+                    // Populate form fields
+                    if (tripInfo.name) document.getElementById('tripName').value = tripInfo.name;
+                    if (tripInfo.startDate) document.getElementById('startDate').value = tripInfo.startDate;
+                    if (tripInfo.endDate) document.getElementById('endDate').value = tripInfo.endDate;
+                    if (tripInfo.destinations) document.getElementById('destinations').value = tripInfo.destinations;
+                    if (tripInfo.totalBudget) document.getElementById('totalBudget').value = tripInfo.totalBudget;
+                    if (tripInfo.travelStyle) document.getElementById('travelStyle').value = tripInfo.travelStyle;
+                    if (tripInfo.groupSize) document.getElementById('groupSize').value = tripInfo.groupSize;
+                    if (tripInfo.transportPref) document.getElementById('transportPref').value = tripInfo.transportPref;
+                    if (tripInfo.accommodationPref) document.getElementById('accommodationPref').value = tripInfo.accommodationPref;
+                    
+                    // Populate budget fields
+                    if (budgetData.foodBudget) document.getElementById('foodBudget').value = budgetData.foodBudget;
+                    if (budgetData.activitiesBudget) document.getElementById('activitiesBudget').value = budgetData.activitiesBudget;
+                    if (budgetData.shoppingBudget) document.getElementById('shoppingBudget').value = budgetData.shoppingBudget;
+                    if (budgetData.miscBudget) document.getElementById('miscBudget').value = budgetData.miscBudget;
+                    if (budgetData.emergencyBudget) document.getElementById('emergencyBudget').value = budgetData.emergencyBudget;
+                    if (budgetData.insuranceBudget) document.getElementById('insuranceBudget').value = budgetData.insuranceBudget;
+                    
+                    showAlert('✅ Previous trip data loaded from your computer!', 'success');
+                } catch (e) {
+                    console.error('Error loading data:', e);
+                }
+            }
+        }
+
+        function clearAllData() {
+            if (confirm('Are you sure you want to clear all trip data? This cannot be undone.')) {
+                localStorage.removeItem('adventurePlannerData');
+                tripData = [];
+                budgetData = {
+                    totalBudget: 1000,
+                    foodBudget: 0,
+                    activitiesBudget: 0,
+                    shoppingBudget: 0,
+                    miscBudget: 0,
+                    emergencyBudget: 0,
+                    insuranceBudget: 0
+                };
+                tripInfo = {};
+                location.reload();
+            }
+        }
+
+        // Event Listeners
+        function setupEventListeners() {
+            // Auto-save on budget changes
+            const budgetFields = ['foodBudget', 'activitiesBudget', 'shoppingBudget', 'miscBudget', 'emergencyBudget', 'insuranceBudget'];
+            budgetFields.forEach(field => {
+                document.getElementById(field).addEventListener('input', function() {
+                    budgetData[field] = parseFloat(this.value) || 0;
+                    saveToLocalStorage();
+                    updateBudgetOverview();
+                });
+            });
+        }
+
+        // Tab Functions
+        function showTab(tabName) {
+            // Hide all tab contents
+            const contents = document.querySelectorAll('.tab-content');
+            contents.forEach(content => content.classList.remove('active'));
+            
+            // Remove active class from all tabs
+            const tabs = document.querySelectorAll('.tab');
+            tabs.forEach(tab => tab.classList.remove('active'));
+            
+            // Show selected tab content
+            document.getElementById(tabName).classList.add('active');
+            
+            // Add active class to clicked tab
+            event.target.classList.add('active');
+            
+            // Update content based on tab
+            if (tabName === 'budget') updateBudgetOverview();
+            if (tabName === 'analytics') updateAnalytics();
+            if (tabName === 'summary') updateSummary();
+        }
+
+        // Trip Overview Functions
+        function saveTripOverview() {
+            tripInfo = {
+                name: document.getElementById('tripName').value,
+                startDate: document.getElementById('startDate').value,
+                endDate: document.getElementById('endDate').value,
+                destinations: document.getElementById('destinations').value,
+                totalBudget: parseFloat(document.getElementById('totalBudget').value) || 1000,
+                travelStyle: document.getElementById('travelStyle').value,
+                groupSize: parseInt(document.getElementById('groupSize').value) || 1,
+                transportPref: document.getElementById('transportPref').value,
+                accommodationPref: document.getElementById('accommodationPref').value
+            };
+            
+            budgetData.totalBudget = tripInfo.totalBudget;
+            
+            saveToLocalStorage();
+            updateUI();
+            showAlert('✅ Trip overview saved to your computer!', 'success');
+            
+            // Budget suggestion
+            if (tripInfo.startDate && tripInfo.endDate) {
+                const start = new Date(tripInfo.startDate);
+                const end = new Date(tripInfo.endDate);
+                const days = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+                
+                const suggestedBudget = calculateSuggestedBudget(tripInfo.travelStyle, days);
+                if (tripInfo.totalBudget < suggestedBudget * 0.8) {
+                    showAlert(`💡 Consider budgeting £${suggestedBudget.toFixed(0)} for ${days} days`, 'warning');
+                }
+            }
+        }
+
+        function calculateSuggestedBudget(travelStyle, days) {
+            const dailyRates = {
+                '🎒 Budget Backpacker (£25-40/day)': 32.5,
+                '🌟 Mid-range Explorer (£40-70/day)': 55,
+                '💎 Comfort Traveller (£70+/day)': 95
+            };
+            return (dailyRates[travelStyle] || 50) * days;
+        }
+
+        // Day Planning Functions
+        function addNewDay() {
+            const newDay = {
+                day: tripData.length + 1,
+                date: '',
+                location: '',
+                transportType: 'Bus',
+                transportFrom: '',
+                transportTo: '',
+                transportTime: '',
+                transportCost: 0,
+                accommodationType: 'Hostel',
+                accommodationName: '',
+                accommodationCost: 0,
+                notes: ''
+            };
+            
+            tripData.push(newDay);
+            saveToLocalStorage();
+            updateDaysList();
+            updateUI();
+        }
+
+        function addMultipleDays() {
+            const count = parseInt(document.getElementById('daysToAdd').value) || 1;
+            for (let i = 0; i < count; i++) {
+                addNewDay();
+            }
+        }
+
+        function clearAllDays() {
+            if (confirm('Are you sure you want to clear all days?')) {
+                tripData = [];
+                saveToLocalStorage();
+                updateDaysList();
+                updateUI();
+            }
+        }
+
+        function deleteDay(index) {
+            if (confirm('Delete this day?')) {
+                tripData.splice(index, 1);
+                // Renumber days
+                tripData.forEach((day, i) => day.day = i + 1);
+                saveToLocalStorage();
+                updateDaysList();
+                updateUI();
+            }
+        }
+
+        function copyDay(index) {
+            const originalDay = { ...tripData[index] };
+            originalDay.day = tripData.length + 1;
+            originalDay.date = '';
+            tripData.push(originalDay);
+            saveToLocalStorage();
+            updateDaysList();
+            updateUI();
+        }
+
+        function updateDayData(index, field, value) {
+            if (tripData[index]) {
+                tripData[index][field] = value;
+                saveToLocalStorage();
+                updateUI();
+            }
+        }
+
+        function updateDaysList() {
+            const container = document.getElementById('daysList');
+            
+            if (tripData.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: #6c757d;">👆 Click "Add New Day" to start planning your itinerary!</p>';
+                return;
+            }
+            
+            container.innerHTML = tripData.map((day, index) => {
+                const dayCost = (day.transportCost || 0) + (day.accommodationCost || 0);
+                const completion = calculateDayCompletion(day);
+                const progressIndicator = completion >= 0.8 ? '🟢' : completion >= 0.4 ? '🟡' : '🔴';
+                
+                return `
+                    <div class="day-card">
+                        <div class="day-header">
+                            <div class="day-title">${progressIndicator} Day ${day.day} - ${day.location || 'Location TBD'}</div>
+                            <div class="day-cost">£${dayCost.toFixed(2)}</div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col">
+                                <div class="form-group">
+                                    <label>📅 Date</label>
+                                    <input type="date" value="${day.date || ''}" onchange="updateDayData(${index}, 'date', this.value)">
+                                </div>
+                            </div>
+                            <div class="col">
+                                <div class="form-group">
+                                    <label>📍 Location</label>
+                                    <input type="text" value="${day.location || ''}" placeholder="e.g., Paris, Bangkok" onchange="updateDayData(${index}, 'location', this.value)">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col">
+                                <div class="transport-section">
+                                    <h4>🚌 Transportation</h4>
+                                    <div class="row">
+                                        <div class="col">
+                                            <div class="form-group">
+                                                <label>Type</label>
+                                                <select value="${day.transportType || 'Bus'}" onchange="updateDayData(${index}, 'transportType', this.value)">
+                                                    <option value="Bus">Bus</option>
+                                                    <option value="Train">Train</option>
+                                                    <option value="Plane">Plane</option>
+                                                    <option value="Ferry">Ferry</option>
+                                                    <option value="Car/Taxi">Car/Taxi</option>
+                                                    <option value="Walking">Walking</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="col">
+                                            <div class="form-group">
+                                                <label>From</label>
+                                                <input type="text" value="${day.transportFrom || ''}" placeholder="Departure" onchange="updateDayData(${index}, 'transportFrom', this.value)">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col">
+                                            <div class="form-group">
+                                                <label>To</label>
+                                                <input type="text" value="${day.transportTo || ''}" placeholder="Arrival" onchange="updateDayData(${index}, 'transportTo', this.value)">
+                                            </div>
+                                        </div>
+                                        <div class="col">
+                                            <div class="form-group">
+                                                <label>Time</label>
+                                                <input type="text" value="${day.transportTime || ''}" placeholder="09:30" onchange="updateDayData(${index}, 'transportTime', this.value)">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Cost (£)</label>
+                                        <input type="number" value="${day.transportCost || 0}" min="0" step="1" onchange="updateDayData(${index}, 'transportCost', parseFloat(this.value) || 0)">
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col">
+                                <div class="accommodation-section">
+                                    <h4>🏨 Accommodation</h4>
+                                    <div class="form-group">
+                                        <label>Type</label>
+                                        <select value="${day.accommodationType || 'Hostel'}" onchange="updateDayData(${index}, 'accommodationType', this.value)">
+                                            <option value="Hostel">Hostel</option>
+                                            <option value="Hotel">Hotel</option>
+                                            <option value="Guesthouse">Guesthouse</option>
+                                            <option value="Camping">Camping</option>
+                                            <option value="Airbnb">Airbnb</option>
+                                            <option value="None">None</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Name</label>
+                                        <input type="text" value="${day.accommodationName || ''}" placeholder="Hotel/Hostel name" onchange="updateDayData(${index}, 'accommodationName', this.value)">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Cost (£)</label>
+                                        <input type="number" value="${day.accommodationCost || 0}" min="0" step="1" onchange="updateDayData(${index}, 'accommodationCost', parseFloat(this.value) || 0)">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>📝 Notes & Activities</label>
+                            <textarea rows="3" value="${day.notes || ''}" placeholder="Things to do, places to visit..." onchange="updateDayData(${index}, 'notes', this.value)">${day.notes || ''}</textarea>
+                        </div>
+                        
+                        <div class="row" style="align-items: center;">
+                            <div class="col">
+                                <button class="btn btn-danger" onclick="deleteDay(${index})">🗑️ Delete</button>
+                                <button class="btn btn-secondary" onclick="copyDay(${index})">📋 Copy</button>
+                            </div>
+                            <div class="col">
+                                <div>Completion: ${(completion * 100).toFixed(0)}%</div>
+                                <div class="progress-bar">
+                                    <div class="progress-fill" style="width: ${completion * 100}%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function calculateDayCompletion(day) {
+            const requiredFields = ['location', 'transportFrom', 'transportTo', 'accommodationType'];
+            const optionalFields = ['date', 'transportTime', 'accommodationName', 'notes'];
+            
+            const requiredCompleted = requiredFields.filter(field => day[field]).length;
+            const requiredScore = (requiredCompleted / requiredFields.length) * 0.7;
+            
+            const optionalCompleted = optionalFields.filter(field => day[field]).length;
+            const optionalScore = (optionalCompleted / optionalFields.length) * 0.3;
+            
+            return requiredScore + optionalScore;
+        }
+
+        // Budget Functions
+        function updateBudgetOverview() {
+            const totalTransport = tripData.reduce((sum, day) => sum + (day.transportCost || 0), 0);
+            const totalAccommodation = tripData.reduce((sum, day) => sum + (day.accommodationCost || 0), 0);
+            const additionalCosts = budgetData.foodBudget + budgetData.activitiesBudget + 
+                                  budgetData.shoppingBudget + budgetData.miscBudget + 
+                                  budgetData.emergencyBudget + budgetData.insuranceBudget;
+            const totalPlanned = totalTransport + totalAccommodation + additionalCosts;
+            const remaining = budgetData.totalBudget - totalPlanned;
+            const percentage = budgetData.totalBudget > 0 ? (totalPlanned / budgetData.totalBudget * 100) : 0;
+
+            document.getElementById('budgetOverview').innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-value">£${budgetData.totalBudget.toFixed(0)}</div>
+                    <div class="stat-label">💰 Total Budget</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">£${totalPlanned.toFixed(0)}</div>
+                    <div class="stat-label">📝 Planned</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">£${remaining.toFixed(0)}</div>
+                    <div class="stat-label">💸 Remaining</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${percentage.toFixed(1)}%</div>
+                    <div class="stat-label">📈 Used</div>
+                </div>
+            `;
+
+            // Budget status
+            let statusHTML = '';
+            if (remaining < 0) {
+                statusHTML = `<div class="alert alert-error">💸 Over budget by £${Math.abs(remaining).toFixed(0)}!</div>`;
+            } else if (remaining < budgetData.totalBudget * 0.1) {
+                statusHTML = `<div class="alert alert-warning">🔶 Cutting it close with budget!</div>`;
+            } else {
+                statusHTML = `<div class="alert alert-success">✅ Within budget!</div>`;
+            }
+            
+            document.getElementById('budgetStatus').innerHTML = statusHTML;
+        }
+
+        // Analytics Functions
+        function updateAnalytics() {
+            if (tripData.length === 0) {
+                document.getElementById('analyticsContent').innerHTML = '<p style="text-align: center; color: #6c757d;">Add trip data to see analytics!</p>';
+                return;
+            }
+
+            const completedDays = tripData.filter(day => calculateDayCompletion(day) >= 0.8).length;
+            const completionRate = completedDays / tripData.length;
+            const missingLocations = tripData.filter(day => !day.location).length;
+            const missingTransport = tripData.filter(day => !day.transportFrom).length;
+
+            // Transport stats
+            const transportStats = {};
+            tripData.forEach(day => {
+                const transport = day.transportType || 'Unknown';
+                transportStats[transport] = (transportStats[transport] || 0) + 1;
+            });
+
+            // Accommodation stats
+            const accommodationStats = {};
+            tripData.forEach(day => {
+                const accommodation = day.accommodationType || 'Unknown';
+                accommodationStats[accommodation] = (accommodationStats[accommodation] || 0) + 1;
+            });
+
+            document.getElementById('analyticsContent').innerHTML = `
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value">${completedDays}/${tripData.length}</div>
+                        <div class="stat-label">🏁 Completed Days</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${(completionRate * 100).toFixed(1)}%</div>
+                        <div class="stat-label">📈 Completion Rate</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${missingLocations}</div>
+                        <div class="stat-label">📍 Missing Locations</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${missingTransport}</div>
+                        <div class="stat-label">🚌 Missing Transport</div>
+                    </div>
+                </div>
+                
+                <div class="progress-bar" style="margin: 1rem 0;">
+                    <div class="progress-fill" style="width: ${completionRate * 100}%"></div>
+                </div>
+                <p style="text-align: center;">Overall Trip Planning: ${(completionRate * 100).toFixed(1)}%</p>
+                
+                <div class="row" style="margin-top: 2rem;">
+                    <div class="col">
+                        <h3>🚌 Transport Breakdown</h3>
+                        ${Object.entries(transportStats).map(([type, count]) => 
+                            `<p>${getTransportEmoji(type)} ${type}: ${count} journey${count !== 1 ? 's' : ''}</p>`
+                        ).join('')}
+                    </div>
+                    <div class="col">
+                        <h3>🏨 Accommodation Breakdown</h3>
+                        ${Object.entries(accommodationStats).map(([type, count]) => 
+                            `<p>${getAccommodationEmoji(type)} ${type}: ${count} night${count !== 1 ? 's' : ''}</p>`
+                        ).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function getTransportEmoji(type) {
+            const emojis = {
+                'Bus': '🚌', 'Train': '🚂', 'Plane': '✈️', 'Ferry': '⛴️', 
+                'Car/Taxi': '🚗', 'Walking': '🚶'
+            };
+            return emojis[type] || '🚌';
+        }
+
+        function getAccommodationEmoji(type) {
+            const emojis = {
+                'Hostel': '🏠', 'Hotel': '🏨', 'Guesthouse': '🏡', 'Camping': '⛺',
+                'Airbnb': '🏠', 'None': '🚶'
+            };
+            return emojis[type] || '🏠';
+        }
+
+        // Summary Functions
+        function updateSummary() {
+            if (tripData.length === 0) {
+                document.getElementById('summaryContent').innerHTML = '<p style="text-align: center; color: #6c757d;">Complete your trip planning to see the summary!</p>';
+                return;
+            }
+
+            const tripName = tripInfo.name || 'My Adventure';
+            const totalCost = tripData.reduce((sum, day) => sum + (day.transportCost || 0) + (day.accommodationCost || 0), 0);
+
+            const summaryHTML = `
+                <div class="header" style="margin-bottom: 2rem;">
+                    <h1>🎒 ${tripName}</h1>
+                    <p>Your adventure summary</p>
+                </div>
+                
+                <h3>🗓️ Your Detailed Itinerary</h3>
+                ${tripData.map(day => {
+                    const dayCost = (day.transportCost || 0) + (day.accommodationCost || 0);
+                    return `
+                        <div class="day-card" style="margin-bottom: 1rem;">
+                            <div class="day-header">
+                                <div class="day-title">📍 Day ${day.day} - ${day.location || 'TBD'}</div>
+                                <div class="day-cost">£${dayCost.toFixed(2)}</div>
+                            </div>
+                            ${day.date ? `<p><strong>📅 Date:</strong> ${day.date}</p>` : ''}
+                            <div class="row">
+                                <div class="col">
+                                    <strong>🚌 Transportation:</strong><br>
+                                    ${day.transportFrom && day.transportTo ? 
+                                        `• ${day.transportFrom} → ${day.transportTo}<br>• ${day.transportType} ${day.transportTime ? 'at ' + day.transportTime : ''}<br>• £${(day.transportCost || 0).toFixed(2)}` 
+                                        : '• Transport details TBD'}
+                                </div>
+                                <div class="col">
+                                    <strong>🏨 Accommodation:</strong><br>
+                                    ${day.accommodationType && day.accommodationType !== 'None' ? 
+                                        `• ${day.accommodationType}<br>${day.accommodationName ? '• ' + day.accommodationName + '<br>' : ''}• £${(day.accommodationCost || 0).toFixed(2)}` 
+                                        : '• No accommodation'}
+                                </div>
+                            </div>
+                            ${day.notes ? `<p><strong>📝 Notes:</strong> ${day.notes}</p>` : ''}
+                        </div>
+                    `;
+                }).join('')}
+                
+                <div class="stats-grid" style="margin-top: 2rem;">
+                    <div class="stat-card">
+                        <div class="stat-value">${tripData.length}</div>
+                        <div class="stat-label">📅 Total Days</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">£${totalCost.toFixed(0)}</div>
+                        <div class="stat-label">💰 Total Cost</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">£${tripData.length > 0 ? (totalCost / tripData.length).toFixed(0) : 0}</div>
+                        <div class="stat-label">📊 Avg Daily Cost</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${tripInfo.startDate && tripInfo.endDate ? 
+                            Math.ceil((new Date(tripInfo.endDate) - new Date(tripInfo.startDate)) / (1000 * 60 * 60 * 24)) + 1 : tripData.length}</div>
+                        <div class="stat-label">🌍 Trip Duration</div>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('summaryContent').innerHTML = summaryHTML;
+        }
+
+        // Export Functions
+        function exportToCSV() {
+            if (tripData.length === 0) {
+                showAlert('No trip data to export!', 'error');
+                return;
+            }
+
+            const headers = ['Day', 'Date', 'Location', 'Transport Type', 'Transport From', 'Transport To', 
+                           'Transport Time', 'Transport Cost', 'Accommodation Type', 'Accommodation Name', 
+                           'Accommodation Cost', 'Notes'];
+
+            const csvContent = [
+                headers.join(','),
+                ...tripData.map(day => [
+                    day.day,
+                    day.date || '',
+                    day.location || '',
+                    day.transportType || '',
+                    day.transportFrom || '',
+                    day.transportTo || '',
+                    day.transportTime || '',
+                    day.transportCost || 0,
+                    day.accommodationType || '',
+                    day.accommodationName || '',
+                    day.accommodationCost || 0,
+                    (day.notes || '').replace(/,/g, ';')
+                ].join(','))
+            ].join('\n');
+
+            const blob = new Blob([csvContent], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${(tripInfo.name || 'trip').replace(/\s+/g, '_')}_adventure.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+
+            showAlert('✅ Trip data exported successfully!', 'success');
+        }
+
+        function generateTextSummary() {
+            if (tripData.length === 0) {
+                showAlert('No trip data to generate summary!', 'error');
+                return;
+            }
+
+            const tripName = tripInfo.name || 'My Adventure';
+            const totalCost = tripData.reduce((sum, day) => sum + (day.transportCost || 0) + (day.accommodationCost || 0), 0);
+
+            let text = `🎒 ${tripName}\n${'='.repeat(50)}\n\n`;
+            
+            if (tripInfo.startDate && tripInfo.endDate) {
+                text += `📅 ${tripInfo.startDate} → ${tripInfo.endDate}\n`;
+            }
+            
+            text += `🌍 ${tripData.length} days of adventure\n\n`;
+
+            tripData.forEach(day => {
+                const dayCost = (day.transportCost || 0) + (day.accommodationCost || 0);
+                text += `📍 Day ${day.day} - ${day.location || 'TBD'}\n`;
+                text += `📅 Date: ${day.date || 'TBD'}\n`;
+                text += `🚌 Transport: ${day.transportFrom || 'TBD'} → ${day.transportTo || 'TBD'}\n`;
+                text += `   Type: ${day.transportType || 'TBD'}\n`;
+                if (day.transportTime) text += `   Time: ${day.transportTime}\n`;
+                text += `🏨 Accommodation: ${day.accommodationType || 'TBD'}\n`;
+                if (day.accommodationName) text += `   Place: ${day.accommodationName}\n`;
+                if (day.notes) text += `📝 Notes: ${day.notes}\n`;
+                text += `💰 Cost: £${dayCost.toFixed(2)}\n`;
+                text += '-'.repeat(50) + '\n\n';
+            });
+
+            text += `💰 Total Trip Cost: £${totalCost.toFixed(2)}\n`;
+            text += `🎒 Total Days: ${tripData.length}\n`;
+            if (tripData.length > 0) {
+                text += `📊 Average Daily Cost: £${(totalCost / tripData.length).toFixed(2)}\n`;
+            }
+            text += '\n🌟 Have an amazing adventure! Safe travels! 🎒';
+
+            // Create and show modal with text
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+                background: rgba(0,0,0,0.8); display: flex; align-items: center; 
+                justify-content: center; z-index: 1000;
+            `;
+            
+            modal.innerHTML = `
+                <div style="background: white; padding: 2rem; border-radius: 12px; max-width: 80%; max-height: 80%; overflow: auto;">
+                    <h3>📋 Trip Summary</h3>
+                    <textarea readonly style="width: 100%; height: 400px; font-family: monospace; font-size: 0.9rem;">${text}</textarea>
+                    <div style="margin-top: 1rem; text-align: center;">
+                        <button class="btn btn-primary" onclick="navigator.clipboard.writeText(\`${text.replace(/`/g, '\\`')}\`).then(() => showAlert('Copied to clipboard!', 'success'))">📋 Copy to Clipboard</button>
+                        <button class="btn btn-secondary" onclick="document.body.removeChild(this.closest('div').parentElement)">Close</button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+        }
+
+        // UI Update Functions
+        function updateUI() {
+            // Update stats overview
+            if (tripData.length > 0) {
+                const totalTransport = tripData.reduce((sum, day) => sum + (day.transportCost || 0), 0);
+                const totalAccommodation = tripData.reduce((sum, day) => sum + (day.accommodationCost || 0), 0);
+                const totalCost = totalTransport + totalAccommodation;
+
+                document.getElementById('totalDays').textContent = tripData.length;
+                document.getElementById('totalTransport').textContent = `£${totalTransport.toFixed(0)}`;
+                document.getElementById('totalAccommodation').textContent = `£${totalAccommodation.toFixed(0)}`;
+                document.getElementById('totalCost').textContent = `£${totalCost.toFixed(0)}`;
+                document.getElementById('statsOverview').style.display = 'grid';
+            } else {
+                document.getElementById('statsOverview').style.display = 'none';
+            }
+
+            // Update days list if on planning tab
+            updateDaysList();
+        }
+
+        // Utility Functions
+        function showAlert(message, type) {
+            const alertClass = `alert-${type}`;
+            const alert = document.createElement('div');
+            alert.className = `alert ${alertClass}`;
+            alert.textContent = message;
+            alert.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 1000; min-width: 300px;';
+            
+            document.body.appendChild(alert);
+            
+            setTimeout(() => {
+                if (document.body.contains(alert)) {
+                    document.body.removeChild(alert);
+                }
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
