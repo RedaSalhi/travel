@@ -590,15 +590,7 @@ def show_detailed_statistics():
         st.metric("📊 Avg Daily Cost", f"£{avg_daily:.2f}")
 
 if __name__ == "__main__":
-    main()Days Planned", total_days)
-    with col2:
-        st.metric("Total Cost", f"£{total_cost:.2f}")
-    with col3:
-        st.metric("Budget Remaining", f"£{remaining:.2f}", 
-                 delta=f"{100-percentage_used:.1f}% left")
-    with col4:
-        avg_daily = total_cost / total_days if total_days > 0 else 0
-        st.metric("Avg Daily Cost", f"£{avg_daily:.2f}")
+    main()
 
 def trip_overview():
     """Trip overview and basic information"""
@@ -1082,90 +1074,6 @@ def trip_summary():
             show_trip_statistics()
     st.markdown('</div>', unsafe_allow_html=True)
 
-# Helper functions
-def add_new_day():
-    new_day = {
-        'day': len(st.session_state.trip_data) + 1,
-        'date': '',
-        'location': '',
-        'transport_type': 'Bus',
-        'transport_from': '',
-        'transport_to': '',
-        'transport_time': '',
-        'transport_cost': 0.0,
-        'accommodation_type': 'Hostel',
-        'accommodation_name': '',
-        'accommodation_cost': 0.0,
-        'notes': ''
-    }
-    st.session_state.trip_data.append(new_day)
-    st.rerun()
-
-def delete_day(index):
-    st.session_state.trip_data.pop(index)
-    # Renumber remaining days
-    for j, remaining_day in enumerate(st.session_state.trip_data):
-        remaining_day['day'] = j + 1
-    st.rerun()
-
-def copy_day(index):
-    original_day = st.session_state.trip_data[index].copy()
-    original_day['day'] = len(st.session_state.trip_data) + 1
-    original_day['date'] = ''  # Clear date for new day
-    st.session_state.trip_data.append(original_day)
-    st.rerun()
-
-def update_day_data(index, data):
-    st.session_state.trip_data[index].update(data)
-
-def get_transport_index(transport_type):
-    transport_types = ["Bus", "Bus (overnight)", "Train", "Train (overnight)", "Plane", 
-                      "Ferry", "Car/Taxi", "Walking", "Local Transport", "Cycling"]
-    try:
-        return transport_types.index(transport_type)
-    except ValueError:
-        return 0
-
-def get_accommodation_index(accommodation_type):
-    accommodation_types = ["Hostel", "Hotel", "Guesthouse", "Camping", "Bus (sleeping)", "Train (sleeping)", 
-                          "Airbnb", "Couchsurfing", "Friend's place", "None (transit day)"]
-    try:
-        return accommodation_types.index(accommodation_type)
-    except ValueError:
-        return 0
-
-def generate_text_itinerary():
-    trip_name = st.session_state.trip_info.get('name', 'My Adventure')
-    text = f"🎒 {trip_name}\n{'='*len(trip_name)+4}\n\n"
-    
-    total_cost = 0
-    for day in st.session_state.trip_data:
-        day_cost = day.get('transport_cost', 0) + day.get('accommodation_cost', 0)
-        total_cost += day_cost
-        
-        text += f"📍 Day {day['day']} - {day.get('location', 'TBD')}\n"
-        text += f"📅 Date: {day.get('date', 'TBD')}\n"
-        text += f"🚌 Transport: {day.get('transport_type', 'TBD')} from {day.get('transport_from', 'TBD')} to {day.get('transport_to', 'TBD')}\n"
-        
-        if day.get('transport_time'):
-            text += f"⏰ Departure: {day['transport_time']}\n"
-            
-        text += f"🏨 Accommodation: {day.get('accommodation_type', 'TBD')}"
-        if day.get('accommodation_name'):
-            text += f" - {day['accommodation_name']}"
-        text += "\n"
-        
-        if day.get('notes'):
-            text += f"📝 Notes: {day['notes']}\n"
-        text += f"💰 Daily Cost: £{day_cost:.2f}\n"
-        text += "-" * 40 + "\n\n"
-    
-    text += f"💰 Total Trip Cost: £{total_cost:.2f}\n"
-    text += f"🎒 Total Days: {len(st.session_state.trip_data)}\n"
-    text += f"📊 Average Daily Cost: £{total_cost/len(st.session_state.trip_data):.2f}\n\n"
-    text += "🌟 Have an amazing trip! Safe travels! 🎒"
-    
-    return text
 
 def show_trip_statistics():
     st.subheader("📊 Your Adventure Statistics")
