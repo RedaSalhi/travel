@@ -52,7 +52,7 @@ A modern, interactive web application for planning your perfect backpacking adve
 
 4. **Run the application**
    ```bash
-   streamlit run src/main.py
+   streamlit run backpacking_planner.py
    ```
 
 5. **Open your browser**
@@ -163,7 +163,7 @@ Review and export your plans:
 
 1. Create feature branch: `git checkout -b feature-name`
 2. Add your component to `src/components/`
-3. Update `src/main.py` to include new component
+3. Update `backpacking_planner.py` to include new component
 4. Add tests in `tests/`
 5. Update documentation
 6. Submit pull request
