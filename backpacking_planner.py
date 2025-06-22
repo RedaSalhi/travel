@@ -467,6 +467,8 @@ def init_session_state():
                 'accommodation_preference': '🏠 Hostels'
             }
 
+        if 'trip_data' in st.session_state and st.session_state.trip_data:
+            st.success("✅ Previous trip data loaded!")
 # ============================================================================
 # COMPONENT FUNCTIONS (Fixed and integrated)
 # ============================================================================
