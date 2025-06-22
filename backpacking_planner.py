@@ -589,8 +589,6 @@ def show_detailed_statistics():
         avg_daily = (total_transport + total_accommodation) / len(st.session_state.trip_data) if st.session_state.trip_data else 0
         st.metric("📊 Avg Daily Cost", f"£{avg_daily:.2f}")
 
-if __name__ == "__main__":
-    main()
 
 def trip_overview():
     """Trip overview and basic information"""
