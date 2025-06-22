@@ -1,4 +1,46 @@
-import streamlit as st
+def main():
+    # Load CSS
+    load_css()
+    
+    # Header
+    st.markdown("""
+    <div class="main-header">
+        <h1>🎒 Backpacking Trip Planner</h1>
+        <p>Plan your perfect adventure - from local escapes to epic journeys!</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Navigation tabs in main area
+    st.markdown('<div class="nav-tabs">', unsafe_allow_html=True)
+    tab1, tab2, tab3, tab4 = st.tabs(["🌍 Trip Overview", "📅 Day-by-Day Planning", "💰 Budget Calculator", "📋 Trip Summary"])
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Quick stats in main area
+    if st.session_state.trip_data:
+        st.markdown('<div class="quick-stats">', unsafe_allow_html=True)
+        st.subheader("📊 Trip at a Glance")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        total_days = len(st.session_state.trip_data)
+        total_cost = sum(day.get('transport_cost', 0.0) + day.get('accommodation_cost', 0.0) for day in st.session_state.trip_data)
+        budget = st.session_state.budget_data['total_budget']
+        remaining = budget - total_cost
+        
+        with col1:
+            st.metric("Days Planned", total_days)
+        with col2:
+            st.metric("Total Cost", f"£{total_cost:.2f}")
+        with col3:
+            st.metric("Budget Remaining", f"£{remaining:.2f}")
+        with col4:
+            percentage_left = (remaining/budget)*100 if budget > 0 else 0
+            st.metric("Budget Left", f"{percentage_left:.1f}%")
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Tab content
+    with tab1import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 import plotly.express as px
@@ -8,225 +50,142 @@ import plotly.graph_objects as go
 st.set_page_config(
     page_title="Backpacking Trip Planner",
     page_icon="🎒",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
 
-# CSS styling with enhanced modern design
+# CSS styling with light theme
 def load_css():
     st.markdown("""
     <style>
-    /* Import sophisticated Google Fonts */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+    /* Import clean Google Fonts */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap');
     
-    /* Global Variables */
+    /* Light Theme Variables */
     :root {
-        --primary-blue: #2563eb;
-        --primary-red: #dc2626;
-        --dark-blue: #1e40af;
-        --light-blue: #dbeafe;
-        --gray-50: #f8fafc;
-        --gray-100: #f1f5f9;
-        --gray-200: #e2e8f0;
-        --gray-300: #cbd5e1;
-        --gray-600: #475569;
-        --gray-800: #1e293b;
-        --gray-900: #0f172a;
-        --success: #10b981;
-        --warning: #f59e0b;
-        --error: #ef4444;
+        --primary: #3b82f6;
+        --primary-dark: #2563eb;
+        --secondary: #f59e0b;
+        --accent: #10b981;
+        --background: #ffffff;
+        --surface: #f8fafc;
+        --surface-alt: #f1f5f9;
+        --border: #e2e8f0;
+        --border-light: #f1f5f9;
+        --text-primary: #1e293b;
+        --text-secondary: #64748b;
+        --text-muted: #94a3b8;
         --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
         --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
         --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-        --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-        --border-radius: 12px;
-        --border-radius-lg: 16px;
+        --radius: 8px;
+        --radius-lg: 12px;
     }
     
-    /* Main app styling */
+    /* Hide sidebar */
+    .css-1d391kg {
+        display: none;
+    }
+    
+    /* Main app styling with light theme */
     .main .block-container {
         padding-top: 1rem;
         padding-bottom: 2rem;
-        max-width: 1200px;
-        background: linear-gradient(135deg, var(--gray-50) 0%, #ffffff 100%);
+        max-width: 1400px;
+        background: var(--background);
     }
     
-    /* Enhanced header styling */
+    /* Light header styling */
     .main-header {
-        background: linear-gradient(135deg, var(--primary-blue) 0%, var(--dark-blue) 100%);
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
         color: white;
-        padding: 2.5rem 2rem;
-        border-radius: var(--border-radius-lg);
+        padding: 2rem;
+        border-radius: var(--radius-lg);
         text-align: center;
         margin-bottom: 2rem;
-        box-shadow: var(--shadow-xl);
-        position: relative;
-        overflow: hidden;
-    }
-    
-    .main-header::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: linear-gradient(45deg, rgba(255,255,255,0.1) 0%, transparent 50%, rgba(255,255,255,0.05) 100%);
-        pointer-events: none;
+        box-shadow: var(--shadow-lg);
     }
     
     .main-header h1 {
-        font-family: 'Space Grotesk', sans-serif;
-        font-size: 3rem;
+        font-family: 'Poppins', sans-serif;
+        font-size: 2.5rem;
         font-weight: 700;
         margin: 0;
-        text-shadow: 0 4px 8px rgba(0,0,0,0.3);
-        background: linear-gradient(45deg, #ffffff, #e0e7ff);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
     
     .main-header p {
         font-family: 'Inter', sans-serif;
-        font-size: 1.25rem;
+        font-size: 1.1rem;
         font-weight: 400;
-        margin: 1rem 0 0 0;
-        opacity: 0.95;
-        letter-spacing: 0.025em;
+        margin: 0.5rem 0 0 0;
+        opacity: 0.9;
     }
     
-    /* Enhanced sidebar styling */
-    .css-1d391kg {
-        background: linear-gradient(180deg, var(--gray-900) 0%, var(--gray-800) 100%);
-        border-right: 1px solid var(--gray-300);
+    /* Navigation tabs styling */
+    .nav-tabs {
+        background: var(--surface);
+        padding: 1rem;
+        border-radius: var(--radius-lg);
+        margin-bottom: 2rem;
+        border: 1px solid var(--border);
+        box-shadow: var(--shadow-sm);
     }
     
-    .css-1d391kg .css-1v0mbdj {
-        color: white;
-        font-family: 'Inter', sans-serif;
+    /* Quick stats styling */
+    .quick-stats {
+        background: var(--surface);
+        padding: 1.5rem;
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border);
+        margin-bottom: 2rem;
+        box-shadow: var(--shadow-sm);
     }
     
-    /* Modern section headers */
+    /* Section headers with light theme */
     .section-header {
-        background: linear-gradient(135deg, #ffffff 0%, var(--gray-100) 100%);
-        color: var(--gray-800);
+        background: var(--surface);
+        color: var(--text-primary);
         padding: 1.5rem 2rem;
-        border-radius: var(--border-radius);
+        border-radius: var(--radius-lg);
         text-align: center;
-        font-family: 'Space Grotesk', sans-serif;
+        font-family: 'Poppins', sans-serif;
         font-weight: 600;
         margin: 2rem 0 1.5rem 0;
-        border: 2px solid var(--gray-200);
-        box-shadow: var(--shadow-md);
-        position: relative;
-    }
-    
-    .section-header::after {
-        content: '';
-        position: absolute;
-        bottom: 0;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 60px;
-        height: 3px;
-        background: linear-gradient(90deg, var(--primary-blue), var(--primary-red));
-        border-radius: 2px;
-    }
-    
-    /* Enhanced metric cards */
-    .metric-card {
-        background: linear-gradient(135deg, #ffffff 0%, var(--gray-50) 100%);
-        padding: 1.5rem;
-        border-radius: var(--border-radius);
-        border: 1px solid var(--gray-200);
-        box-shadow: var(--shadow-md);
-        margin-bottom: 1rem;
-        transition: all 0.3s ease;
-        position: relative;
-        overflow: hidden;
-    }
-    
-    .metric-card::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 4px;
-        height: 100%;
-        background: linear-gradient(180deg, var(--primary-blue), var(--primary-red));
-    }
-    
-    .metric-card:hover {
-        transform: translateY(-2px);
-        box-shadow: var(--shadow-lg);
-    }
-    
-    /* Enhanced expander styling */
-    .streamlit-expanderHeader {
-        background: linear-gradient(135deg, #ffffff 0%, var(--gray-50) 100%);
-        border: 1px solid var(--gray-200);
-        border-radius: var(--border-radius) !important;
-        font-family: 'Inter', sans-serif;
-        font-weight: 600;
+        border: 1px solid var(--border);
         box-shadow: var(--shadow-sm);
-        transition: all 0.3s ease;
     }
     
-    .streamlit-expanderHeader:hover {
-        box-shadow: var(--shadow-md);
-        border-color: var(--primary-blue);
-    }
-    
-    /* Modern button styling */
+    /* Light button styling */
     .stButton > button {
-        background: linear-gradient(135deg, var(--primary-red) 0%, #b91c1c 100%);
+        background: var(--primary);
         color: white;
         border: none;
-        border-radius: var(--border-radius);
+        border-radius: var(--radius);
         font-family: 'Inter', sans-serif;
-        font-weight: 600;
+        font-weight: 500;
         padding: 0.75rem 1.5rem;
-        transition: all 0.3s ease;
+        transition: all 0.2s ease;
         box-shadow: var(--shadow-sm);
-        letter-spacing: 0.025em;
     }
     
     .stButton > button:hover {
-        background: linear-gradient(135deg, #b91c1c 0%, #991b1b 100%);
-        transform: translateY(-2px);
-        box-shadow: var(--shadow-lg);
-    }
-    
-    .stButton > button:active {
-        transform: translateY(0);
-        box-shadow: var(--shadow-sm);
-    }
-    
-    /* Primary button styling */
-    .stButton > button[kind="primary"] {
-        background: linear-gradient(135deg, var(--primary-blue) 0%, var(--dark-blue) 100%);
+        background: var(--primary-dark);
+        transform: translateY(-1px);
         box-shadow: var(--shadow-md);
     }
     
-    .stButton > button[kind="primary"]:hover {
-        background: linear-gradient(135deg, var(--dark-blue) 0%, #1e40af 100%);
-        box-shadow: var(--shadow-xl);
-    }
-    
-    /* Enhanced input field styling */
+    /* Input fields with light styling */
     .stTextInput > div > div > input,
     .stSelectbox > div > div > div,
     .stNumberInput > div > div > input,
     .stTextArea > div > div > textarea,
     .stDateInput > div > div > input {
-        border: 2px solid var(--gray-200);
-        border-radius: var(--border-radius);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
         font-family: 'Inter', sans-serif;
-        font-weight: 400;
-        padding: 0.75rem 1rem;
-        transition: all 0.3s ease;
-        background: #ffffff;
-        box-shadow: var(--shadow-sm);
+        background: var(--background);
+        transition: all 0.2s ease;
     }
     
     .stTextInput > div > div > input:focus,
@@ -234,232 +193,147 @@ def load_css():
     .stNumberInput > div > div > input:focus,
     .stTextArea > div > div > textarea:focus,
     .stDateInput > div > div > input:focus {
-        border-color: var(--primary-blue);
-        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1), var(--shadow-md);
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
         outline: none;
     }
     
-    /* Enhanced section styling */
+    /* Light section styling */
     .transport-section {
-        background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+        background: #f0f9ff;
         padding: 1.5rem;
-        border-radius: var(--border-radius);
-        border: 1px solid #0ea5e9;
-        margin-bottom: 1.5rem;
-        box-shadow: var(--shadow-sm);
-        position: relative;
-    }
-    
-    .transport-section::before {
-        content: '🚌';
-        position: absolute;
-        top: -10px;
-        left: 20px;
-        background: white;
-        padding: 0 8px;
-        font-size: 1.2rem;
+        border-radius: var(--radius);
+        border: 1px solid #bae6fd;
+        margin-bottom: 1rem;
     }
     
     .accommodation-section {
-        background: linear-gradient(135deg, #fdf2f8 0%, #fce7f3 100%);
+        background: #fef3f2;
         padding: 1.5rem;
-        border-radius: var(--border-radius);
-        border: 1px solid #ec4899;
-        margin-bottom: 1.5rem;
-        box-shadow: var(--shadow-sm);
-        position: relative;
+        border-radius: var(--radius);
+        border: 1px solid #fecaca;
+        margin-bottom: 1rem;
     }
     
-    .accommodation-section::before {
-        content: '🏨';
-        position: absolute;
-        top: -10px;
-        left: 20px;
-        background: white;
-        padding: 0 8px;
-        font-size: 1.2rem;
-    }
-    
-    /* Enhanced alert styling */
+    /* Light alert styling */
     .stSuccess {
-        background: linear-gradient(135deg, var(--success) 0%, #059669 100%);
-        border-radius: var(--border-radius);
-        box-shadow: var(--shadow-md);
+        background: linear-gradient(135deg, var(--accent) 0%, #059669 100%);
+        border-radius: var(--radius);
         border: none;
     }
     
     .stWarning {
-        background: linear-gradient(135deg, var(--warning) 0%, #d97706 100%);
-        border-radius: var(--border-radius);
-        box-shadow: var(--shadow-md);
+        background: linear-gradient(135deg, var(--secondary) 0%, #d97706 100%);
+        border-radius: var(--radius);
         border: none;
     }
     
     .stError {
-        background: linear-gradient(135deg, var(--error) 0%, #dc2626 100%);
-        border-radius: var(--border-radius);
-        box-shadow: var(--shadow-md);
+        background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+        border-radius: var(--radius);
         border: none;
     }
     
     .stInfo {
-        background: linear-gradient(135deg, var(--primary-blue) 0%, var(--dark-blue) 100%);
-        border-radius: var(--border-radius);
-        box-shadow: var(--shadow-md);
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        border-radius: var(--radius);
         border: none;
     }
     
-    /* Modern footer styling */
-    .footer {
-        background: linear-gradient(135deg, var(--gray-800) 0%, var(--gray-900) 100%);
-        color: white;
-        text-align: center;
-        padding: 2rem;
-        border-radius: var(--border-radius);
-        margin-top: 3rem;
-        font-family: 'Inter', sans-serif;
-        box-shadow: var(--shadow-lg);
-    }
-    
-    /* Enhanced scrollbar */
-    ::-webkit-scrollbar {
-        width: 8px;
-    }
-    
-    ::-webkit-scrollbar-track {
-        background: var(--gray-100);
-        border-radius: 4px;
-    }
-    
-    ::-webkit-scrollbar-thumb {
-        background: linear-gradient(180deg, var(--primary-blue) 0%, var(--primary-red) 100%);
-        border-radius: 4px;
-        transition: all 0.3s ease;
-    }
-    
-    ::-webkit-scrollbar-thumb:hover {
-        background: linear-gradient(180deg, var(--dark-blue) 0%, #b91c1c 100%);
-    }
-    
-    /* Typography improvements */
-    h1, h2, h3, h4, h5, h6 {
-        font-family: 'Space Grotesk', sans-serif !important;
-        color: var(--gray-800) !important;
-        font-weight: 600 !important;
-        letter-spacing: -0.025em !important;
-    }
-    
-    p, div, span, label {
-        font-family: 'Inter', sans-serif !important;
-        color: var(--gray-600) !important;
-        line-height: 1.6 !important;
-    }
-    
-    /* Enhanced chart styling */
-    .js-plotly-plot {
-        border-radius: var(--border-radius);
-        box-shadow: var(--shadow-md);
-        border: 1px solid var(--gray-200);
-        background: white;
-    }
-    
-    /* Modern divider */
-    .modern-divider {
-        height: 2px;
-        background: linear-gradient(90deg, transparent 0%, var(--primary-blue) 50%, transparent 100%);
-        margin: 2rem 0;
-        border-radius: 1px;
-    }
-    
-    /* Card container styling */
+    /* Light card containers */
     .card-container {
-        background: white;
-        border-radius: var(--border-radius);
+        background: var(--background);
+        border-radius: var(--radius-lg);
         padding: 1.5rem;
-        box-shadow: var(--shadow-md);
-        border: 1px solid var(--gray-200);
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border);
         margin-bottom: 1.5rem;
-        transition: all 0.3s ease;
+        transition: all 0.2s ease;
     }
     
     .card-container:hover {
-        box-shadow: var(--shadow-lg);
+        box-shadow: var(--shadow-md);
         transform: translateY(-1px);
     }
     
     /* Stats container */
     .stats-container {
-        background: linear-gradient(135deg, var(--gray-50) 0%, white 100%);
+        background: var(--surface);
         padding: 2rem;
-        border-radius: var(--border-radius);
-        border: 1px solid var(--gray-200);
-        box-shadow: var(--shadow-md);
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border);
+        box-shadow: var(--shadow-sm);
         margin: 1rem 0;
     }
     
-    /* Improved sidebar stats */
-    .sidebar-stats {
-        background: rgba(255,255,255,0.1);
+    /* Light typography */
+    h1, h2, h3, h4, h5, h6 {
+        font-family: 'Poppins', sans-serif !important;
+        color: var(--text-primary) !important;
+        font-weight: 600 !important;
+    }
+    
+    p, div, span, label {
+        font-family: 'Inter', sans-serif !important;
+        color: var(--text-secondary) !important;
+        line-height: 1.6 !important;
+    }
+    
+    /* Light charts */
+    .js-plotly-plot {
+        border-radius: var(--radius);
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border);
+        background: var(--background);
+    }
+    
+    /* Light divider */
+    .modern-divider {
+        height: 1px;
+        background: var(--border);
+        margin: 2rem 0;
+    }
+    
+    /* Light expander */
+    .streamlit-expanderHeader {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius) !important;
+        font-family: 'Inter', sans-serif;
+        font-weight: 500;
+    }
+    
+    /* Light metrics */
+    .metric-card {
+        background: var(--background);
         padding: 1.5rem;
-        border-radius: var(--border-radius);
-        margin: 1rem 0;
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(255,255,255,0.2);
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
+        box-shadow: var(--shadow-sm);
+        margin-bottom: 1rem;
+    }
+    
+    /* Light footer */
+    .footer {
+        background: var(--surface);
+        color: var(--text-secondary);
+        text-align: center;
+        padding: 2rem;
+        border-radius: var(--radius-lg);
+        margin-top: 3rem;
+        border: 1px solid var(--border);
     }
     
     /* Mobile responsiveness */
     @media (max-width: 768px) {
         .main-header h1 {
-            font-size: 2.5rem;
-        }
-        
-        .main-header p {
-            font-size: 1.1rem;
+            font-size: 2rem;
         }
         
         .main .block-container {
             padding-left: 1rem;
             padding-right: 1rem;
         }
-        
-        .section-header {
-            padding: 1rem;
-        }
-        
-        .transport-section,
-        .accommodation-section {
-            padding: 1rem;
-        }
-    }
-    
-    @media (max-width: 480px) {
-        .main-header {
-            padding: 2rem 1rem;
-        }
-        
-        .main-header h1 {
-            font-size: 2rem;
-        }
-        
-        .card-container {
-            padding: 1rem;
-        }
-    }
-    
-    /* Loading animation */
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(10px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-    
-    .main .block-container > div {
-        animation: fadeIn 0.6s ease-out;
-    }
-    
-    /* Focus indicators for accessibility */
-    *:focus-visible {
-        outline: 2px solid var(--primary-blue) !important;
-        outline-offset: 2px !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -481,75 +355,17 @@ if 'trip_info' not in st.session_state:
         'destinations': ''
     }
 
-def main():
-    # Load CSS
-    load_css()
-    
-    # Custom header with modern design
-    st.markdown("""
-    <div class="main-header">
-        <h1>🎒 Backpacking Trip Planner</h1>
-        <p>Plan your perfect adventure - from local escapes to epic journeys!</p>
-    </div>
-    <div class="modern-divider"></div>
-    """, unsafe_allow_html=True)
-    
-    # Sidebar for navigation
-    st.sidebar.markdown("""
-    <div class="sidebar-stats">
-        <h2 style="color: white; text-align: center; margin: 0; font-size: 1.5rem;">🧭 Navigation</h2>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    page = st.sidebar.selectbox("Choose your section:", 
-                                ["🌍 Trip Overview", "📅 Day-by-Day Planning", "💰 Budget Calculator", "📋 Trip Summary"])
-    
-    # Quick stats in sidebar with modern styling
-    if st.session_state.trip_data:
-        st.sidebar.markdown("""
-        <div class="sidebar-stats">
-            <h3 style="color: white; text-align: center; margin-bottom: 1rem; font-size: 1.25rem;">📊 Trip Stats</h3>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        total_days = len(st.session_state.trip_data)
-        total_cost = sum(day.get('transport_cost', 0.0) + day.get('accommodation_cost', 0.0) for day in st.session_state.trip_data)
-        
-        st.sidebar.markdown(f"""
-        <div style="color: white; text-align: center; font-family: 'Inter', sans-serif;">
-            <p><strong>Days Planned:</strong> {total_days}</p>
-            <p><strong>Total Cost:</strong> £{total_cost:.2f}</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        budget = st.session_state.budget_data['total_budget']
-        remaining = budget - total_cost
-        percentage_left = (remaining/budget)*100 if budget > 0 else 0
-        
-        st.sidebar.markdown(f"""
-        <div style="color: white; text-align: center; font-family: 'Inter', sans-serif;">
-            <p><strong>Budget Remaining:</strong> £{remaining:.2f}</p>
-            <p><strong>Budget Left:</strong> {percentage_left:.1f}%</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # Add inspirational travel quote
-    st.sidebar.markdown("""
-    <div class="sidebar-stats">
-        <p style="color: white; font-style: italic; text-align: center; margin: 0; font-family: 'Inter', sans-serif;">
-            "Adventure awaits those who plan well"<br>
-            <small>- Happy travels! 🌟</small>
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    if page == "🌍 Trip Overview":
+    # Tab content
+    with tab1:
         trip_overview()
-    elif page == "📅 Day-by-Day Planning":
+    
+    with tab2:
         day_by_day_planning()
-    elif page == "💰 Budget Calculator":
+    
+    with tab3:
         budget_calculator()
-    elif page == "📋 Trip Summary":
+    
+    with tab4:
         trip_summary()
     
     # Footer
@@ -649,7 +465,7 @@ def day_by_day_planning():
         """, unsafe_allow_html=True)
         return
     
-    # Display existing days with modern styling
+    # Display existing days with light styling
     for i, day_data in enumerate(st.session_state.trip_data):
         day_cost = day_data.get('transport_cost', 0.0) + day_data.get('accommodation_cost', 0.0)
         
@@ -666,12 +482,12 @@ def day_by_day_planning():
                                        value=day_data.get('location', ''),
                                        placeholder="e.g., Paris, Bangkok, Edinburgh")
             
-            # Transport and accommodation sections with modern styling
+            # Transport and accommodation sections
             col1, col2 = st.columns(2)
             
             with col1:
                 st.markdown('<div class="transport-section">', unsafe_allow_html=True)
-                st.markdown("### 🚌 Transport")
+                st.markdown("#### 🚌 Transport")
                 
                 transport_type = st.selectbox(
                     "Transport Type", 
@@ -702,7 +518,7 @@ def day_by_day_planning():
                 
             with col2:
                 st.markdown('<div class="accommodation-section">', unsafe_allow_html=True)
-                st.markdown("### 🏨 Accommodation")
+                st.markdown("#### 🏨 Accommodation")
                 
                 accommodation_type = st.selectbox(
                     "Accommodation Type",
