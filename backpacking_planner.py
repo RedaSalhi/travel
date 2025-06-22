@@ -4,8 +4,6 @@ from datetime import datetime, timedelta
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import json
-import os
 
 # Page configuration
 st.set_page_config(
@@ -14,88 +12,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed"
 )
-
-# ============================================================================
-# DATA MANAGEMENT (Integrated)
-# ============================================================================
-
-def save_trip_data(trip_data, budget_data, trip_info):
-    """Save all trip data to JSON file"""
-    try:
-        data_to_save = {
-            "trip_data": trip_data,
-            "budget_data": budget_data,
-            "trip_info": serialize_trip_info(trip_info),
-            "last_saved": datetime.now().isoformat(),
-            "version": "1.0"
-        }
-        
-        with open("trip_data.json", 'w', encoding='utf-8') as f:
-            json.dump(data_to_save, f, indent=2, ensure_ascii=False)
-        return True
-    except Exception as e:
-        st.error(f"Error saving data: {e}")
-        return False
-
-def load_trip_data():
-    """Load trip data from JSON file"""
-    try:
-        if not os.path.exists("trip_data.json"):
-            return None
-        
-        with open("trip_data.json", 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        
-        if "trip_info" in data:
-            data["trip_info"] = deserialize_trip_info(data["trip_info"])
-        
-        return data
-    except Exception as e:
-        st.error(f"Error loading data: {e}")
-        return None
-
-def serialize_trip_info(trip_info):
-    """Convert date objects to strings for JSON serialization"""
-    serialized = trip_info.copy()
-    
-    if "start_date" in serialized and serialized["start_date"]:
-        if hasattr(serialized["start_date"], 'isoformat'):
-            serialized["start_date"] = serialized["start_date"].isoformat()
-    
-    if "end_date" in serialized and serialized["end_date"]:
-        if hasattr(serialized["end_date"], 'isoformat'):
-            serialized["end_date"] = serialized["end_date"].isoformat()
-    
-    return serialized
-
-def deserialize_trip_info(trip_info):
-    """Convert date strings back to date objects"""
-    deserialized = trip_info.copy()
-    
-    if "start_date" in deserialized and deserialized["start_date"]:
-        try:
-            deserialized["start_date"] = datetime.fromisoformat(deserialized["start_date"]).date()
-        except (ValueError, TypeError):
-            deserialized["start_date"] = None
-    
-    if "end_date" in deserialized and deserialized["end_date"]:
-        try:
-            deserialized["end_date"] = datetime.fromisoformat(deserialized["end_date"]).date()
-        except (ValueError, TypeError):
-            deserialized["end_date"] = None
-    
-    return deserialized
-
-def auto_save():
-    """Auto-save current session state"""
-    try:
-        save_trip_data(
-            st.session_state.trip_data, 
-            st.session_state.budget_data, 
-            st.session_state.trip_info
-        )
-    except Exception as e:
-        st.error(f"Auto-save failed: {e}")
 
 # ============================================================================
 # HELPER FUNCTIONS
@@ -149,7 +65,7 @@ def get_accommodation_emoji(accommodation_type):
     return emoji_map.get(accommodation_type, '🏠')
 
 # ============================================================================
-# CSS STYLING (Simplified)
+# CSS STYLING
 # ============================================================================
 
 def load_css():
@@ -258,6 +174,16 @@ def load_css():
         margin-bottom: 1rem;
     }
     
+    /* Session warning */
+    .session-warning {
+        background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+        border: 2px solid #f39c12;
+        border-radius: 12px;
+        padding: 1rem;
+        margin-bottom: 2rem;
+        text-align: center;
+    }
+    
     /* Metrics styling */
     [data-testid="metric-container"] {
         background: white;
@@ -277,58 +203,63 @@ def load_css():
     """, unsafe_allow_html=True)
 
 # ============================================================================
-# SESSION STATE INITIALIZATION
+# SESSION STATE INITIALIZATION (No File Storage)
 # ============================================================================
 
 def init_session_state():
-    """Initialize session state with proper error handling"""
-    try:
-        # Try to load saved data first
-        saved_data = load_trip_data()
-
-        if saved_data:
-            st.session_state.trip_data = saved_data.get('trip_data', [])
-            st.session_state.budget_data = saved_data.get('budget_data', {})
-            st.session_state.trip_info = saved_data.get('trip_info', {})
-            st.success("✅ Previous trip data loaded!")
-        else:
-            # Initialize with defaults
-            if 'trip_data' not in st.session_state:
-                st.session_state.trip_data = []
-
-            if 'budget_data' not in st.session_state:
-                st.session_state.budget_data = {
-                    'total_budget': 1000.0,
-                    'food_budget': 0.0,
-                    'activities_budget': 0.0,
-                    'shopping_budget': 0.0,
-                    'misc_costs': 0.0,
-                    'emergency_budget': 0.0,
-                    'insurance_cost': 0.0,
-                    'currency': 'GBP'
-                }
-
-            if 'trip_info' not in st.session_state:
-                st.session_state.trip_info = {
-                    'name': '',
-                    'start_date': None,
-                    'end_date': None,
-                    'destinations': '',
-                    'travel_style': '🎒 Budget Backpacker (£25-40/day)',
-                    'group_size': 1,
-                    'transport_preference': '🚌 Bus',
-                    'accommodation_preference': '🏠 Hostels'
-                }
-    except Exception as e:
-        st.error(f"Error initializing session state: {e}")
-        # Initialize with empty defaults if loading fails
+    """Initialize session state - each user gets their own data"""
+    
+    # Initialize trip data (empty for each new session)
+    if 'trip_data' not in st.session_state:
         st.session_state.trip_data = []
-        st.session_state.budget_data = {'total_budget': 1000.0}
-        st.session_state.trip_info = {}
+
+    # Initialize budget data with defaults
+    if 'budget_data' not in st.session_state:
+        st.session_state.budget_data = {
+            'total_budget': 1000.0,
+            'food_budget': 0.0,
+            'activities_budget': 0.0,
+            'shopping_budget': 0.0,
+            'misc_costs': 0.0,
+            'emergency_budget': 0.0,
+            'insurance_cost': 0.0,
+            'currency': 'GBP'
+        }
+
+    # Initialize trip info with defaults
+    if 'trip_info' not in st.session_state:
+        st.session_state.trip_info = {
+            'name': '',
+            'start_date': None,
+            'end_date': None,
+            'destinations': '',
+            'travel_style': '🎒 Budget Backpacker (£25-40/day)',
+            'group_size': 1,
+            'transport_preference': '🚌 Bus',
+            'accommodation_preference': '🏠 Hostels'
+        }
+    
+    # Track if this is a new session
+    if 'session_initialized' not in st.session_state:
+        st.session_state.session_initialized = True
+        st.session_state.is_new_session = True
+    else:
+        st.session_state.is_new_session = False
 
 # ============================================================================
 # COMPONENT FUNCTIONS
 # ============================================================================
+
+def session_info_banner():
+    """Display session information banner"""
+    st.markdown("""
+    <div class="session-warning">
+        <h4>ℹ️ Session-Based Storage</h4>
+        <p><strong>Your data is private!</strong> Each user gets their own session. 
+        Your trip data will be lost when you close your browser or the session expires. 
+        Use the export feature to save your plans permanently.</p>
+    </div>
+    """, unsafe_allow_html=True)
 
 def trip_overview():
     """Trip overview component"""
@@ -344,17 +275,20 @@ def trip_overview():
             trip_name = st.text_input(
                 "🎯 Trip Name", 
                 value=st.session_state.trip_info.get('name', ''),
-                placeholder="e.g., European Adventure"
+                placeholder="e.g., European Adventure",
+                key="trip_name_input"
             )
             
             start_date = st.date_input(
                 "📅 Start Date", 
-                value=st.session_state.trip_info.get('start_date')
+                value=st.session_state.trip_info.get('start_date'),
+                key="start_date_input"
             )
             
             end_date = st.date_input(
                 "🏁 End Date", 
-                value=st.session_state.trip_info.get('end_date')
+                value=st.session_state.trip_info.get('end_date'),
+                key="end_date_input"
             )
             
         with col2:
@@ -362,14 +296,16 @@ def trip_overview():
                 "🗺️ Main Destinations", 
                 value=st.session_state.trip_info.get('destinations', ''),
                 placeholder="List your must-visit places...",
-                height=120
+                height=120,
+                key="destinations_input"
             )
             
             total_budget = st.number_input(
                 "💰 Total Budget (£)", 
                 min_value=0.0, 
                 value=st.session_state.budget_data.get('total_budget', 1000.0),
-                step=100.0
+                step=100.0,
+                key="total_budget_input"
             )
         
         st.markdown('</div>', unsafe_allow_html=True)
@@ -387,7 +323,9 @@ def trip_overview():
                     "🎒 Budget Backpacker (£25-40/day)", 
                     "🌟 Mid-range Explorer (£40-70/day)", 
                     "💎 Comfort Traveller (£70+/day)"
-                ]
+                ],
+                index=0,
+                key="travel_style_input"
             )
         
         with col2:
@@ -395,51 +333,50 @@ def trip_overview():
                 "👥 Group Size", 
                 min_value=1, 
                 max_value=20, 
-                value=st.session_state.trip_info.get('group_size', 1)
+                value=st.session_state.trip_info.get('group_size', 1),
+                key="group_size_input"
             )
         
         with col3:
             transport_preference = st.selectbox(
                 "🚌 Preferred Transport", 
-                ["🚌 Bus", "🚂 Train", "🔄 Mix of Both", "✈️ Airlines", "🚗 Car Rental"]
+                ["🚌 Bus", "🚂 Train", "🔄 Mix of Both", "✈️ Airlines", "🚗 Car Rental"],
+                key="transport_pref_input"
             )
         
         with col4:
             accommodation_preference = st.selectbox(
                 "🏨 Accommodation Style",
-                ["🏠 Hostels", "🏨 Hotels", "🏡 Mix of Both", "⛺ Camping", "🏘️ Local Stays"]
+                ["🏠 Hostels", "🏨 Hotels", "🏡 Mix of Both", "⛺ Camping", "🏘️ Local Stays"],
+                key="accommodation_pref_input"
             )
         
         st.markdown('</div>', unsafe_allow_html=True)
         
         # Save button
-        if st.button("💾 Save Trip Overview", type="primary"):
-            try:
-                st.session_state.trip_info.update({
-                    'name': trip_name,
-                    'start_date': start_date,
-                    'end_date': end_date,
-                    'destinations': destinations,
-                    'travel_style': travel_style,
-                    'group_size': group_size,
-                    'transport_preference': transport_preference,
-                    'accommodation_preference': accommodation_preference
-                })
+        if st.button("💾 Save Trip Overview", type="primary", key="save_overview_btn"):
+            # Update session state directly
+            st.session_state.trip_info.update({
+                'name': trip_name,
+                'start_date': start_date,
+                'end_date': end_date,
+                'destinations': destinations,
+                'travel_style': travel_style,
+                'group_size': group_size,
+                'transport_preference': transport_preference,
+                'accommodation_preference': accommodation_preference
+            })
 
-                st.session_state.budget_data['total_budget'] = total_budget
-                auto_save()
-                st.success("✅ Trip overview saved!")
+            st.session_state.budget_data['total_budget'] = total_budget
+            st.success("✅ Trip overview saved to your session!")
+            
+            # Budget suggestions
+            if start_date and end_date and end_date > start_date:
+                suggested_days = (end_date - start_date).days + 1
+                suggested_budget = calculate_suggested_budget(travel_style, suggested_days)
                 
-                # Budget suggestions
-                if start_date and end_date and end_date > start_date:
-                    suggested_days = (end_date - start_date).days + 1
-                    suggested_budget = calculate_suggested_budget(travel_style, suggested_days)
-                    
-                    if total_budget < suggested_budget * 0.8:
-                        st.warning(f"💡 Consider budgeting £{suggested_budget:.0f} for {suggested_days} days")
-                        
-            except Exception as e:
-                st.error(f"Error saving overview: {e}")
+                if total_budget < suggested_budget * 0.8:
+                    st.warning(f"💡 Consider budgeting £{suggested_budget:.0f} for {suggested_days} days")
 
 def day_by_day_planning():
     """Day-by-day planning component"""
@@ -449,15 +386,15 @@ def day_by_day_planning():
     col1, col2, col3 = st.columns([2, 1, 1])
     
     with col1:
-        if st.button("➕ Add New Day", type="primary"):
+        if st.button("➕ Add New Day", type="primary", key="add_day_btn"):
             add_new_day()
             st.rerun()
     
     with col2:
-        days_to_add = st.number_input("Add Multiple", min_value=1, max_value=10, value=1)
+        days_to_add = st.number_input("Add Multiple", min_value=1, max_value=10, value=1, key="days_to_add_input")
     
     with col3:
-        if st.button(f"Add {days_to_add} Days"):
+        if st.button(f"Add {days_to_add} Days", key="add_multiple_days_btn"):
             for _ in range(int(days_to_add)):
                 add_new_day()
             st.rerun()
@@ -465,6 +402,12 @@ def day_by_day_planning():
     if not st.session_state.trip_data:
         st.info("👆 Click 'Add New Day' to start planning your itinerary!")
         return
+    
+    # Clear all button
+    if len(st.session_state.trip_data) > 0:
+        if st.button("🗑️ Clear All Days", type="secondary", key="clear_all_btn"):
+            st.session_state.trip_data = []
+            st.rerun()
     
     # Display days
     for i, day_data in enumerate(st.session_state.trip_data):
@@ -493,7 +436,8 @@ def day_by_day_planning():
                 
                 transport_type = st.selectbox("Type", 
                     ["Bus", "Train", "Plane", "Ferry", "Car/Taxi", "Walking"], 
-                    key=f"transport_type_{i}")
+                    key=f"transport_type_{i}",
+                    index=["Bus", "Train", "Plane", "Ferry", "Car/Taxi", "Walking"].index(day_data.get('transport_type', 'Bus')))
                 
                 col_from, col_to = st.columns(2)
                 with col_from:
@@ -509,7 +453,8 @@ def day_by_day_planning():
                                                  value=day_data.get('transport_time', ''))
                 with col_cost:
                     transport_cost = st.number_input("Cost (£)", key=f"transport_cost_{i}", 
-                                                   value=float(day_data.get('transport_cost', 0.0)))
+                                                   value=float(day_data.get('transport_cost', 0.0)),
+                                                   min_value=0.0, step=1.0)
                 
                 st.markdown('</div>', unsafe_allow_html=True)
                 
@@ -517,15 +462,18 @@ def day_by_day_planning():
                 st.markdown('<div class="accommodation-section">', unsafe_allow_html=True)
                 st.markdown("#### 🏨 Accommodation")
                 
+                accommodation_types = ["Hostel", "Hotel", "Guesthouse", "Camping", "Airbnb", "None"]
                 accommodation_type = st.selectbox("Type",
-                    ["Hostel", "Hotel", "Guesthouse", "Camping", "Airbnb", "None"], 
-                    key=f"accommodation_type_{i}")
+                    accommodation_types, 
+                    key=f"accommodation_type_{i}",
+                    index=accommodation_types.index(day_data.get('accommodation_type', 'Hostel')))
                 
                 if accommodation_type != "None":
                     accommodation_name = st.text_input("Name", key=f"accommodation_name_{i}", 
                                                      value=day_data.get('accommodation_name', ''))
                     accommodation_cost = st.number_input("Cost (£)", key=f"accommodation_cost_{i}", 
-                                                       value=float(day_data.get('accommodation_cost', 0.0)))
+                                                       value=float(day_data.get('accommodation_cost', 0.0)),
+                                                       min_value=0.0, step=1.0)
                 else:
                     accommodation_name = ""
                     accommodation_cost = 0.0
@@ -549,8 +497,8 @@ def day_by_day_planning():
             with col3:
                 st.progress(completion, text=f"Completion: {completion:.0%}")
             
-            # Update session state
-            update_day_data(i, {
+            # Update session state immediately
+            st.session_state.trip_data[i].update({
                 'date': str(date) if date else '',
                 'location': location,
                 'transport_type': transport_type,
@@ -584,25 +532,31 @@ def budget_calculator():
     
     with col1:
         food_budget = st.number_input("🍽️ Food & Drink (£)", min_value=0.0, 
-                                    value=st.session_state.budget_data.get('food_budget', 0.0))
+                                    value=st.session_state.budget_data.get('food_budget', 0.0),
+                                    step=5.0, key="food_budget_input")
         activities_budget = st.number_input("🎯 Activities (£)", min_value=0.0, 
-                                          value=st.session_state.budget_data.get('activities_budget', 0.0))
+                                          value=st.session_state.budget_data.get('activities_budget', 0.0),
+                                          step=5.0, key="activities_budget_input")
         
     with col2:
         shopping_budget = st.number_input("🛍️ Shopping (£)", min_value=0.0, 
-                                        value=st.session_state.budget_data.get('shopping_budget', 0.0))
+                                        value=st.session_state.budget_data.get('shopping_budget', 0.0),
+                                        step=5.0, key="shopping_budget_input")
         misc_costs = st.number_input("📱 Miscellaneous (£)", min_value=0.0, 
-                                   value=st.session_state.budget_data.get('misc_costs', 0.0))
+                                   value=st.session_state.budget_data.get('misc_costs', 0.0),
+                                   step=5.0, key="misc_budget_input")
     
     with col3:
         emergency_budget = st.number_input("🚨 Emergency Fund (£)", min_value=0.0, 
-                                         value=st.session_state.budget_data.get('emergency_budget', 0.0))
+                                         value=st.session_state.budget_data.get('emergency_budget', 0.0),
+                                         step=10.0, key="emergency_budget_input")
         insurance_cost = st.number_input("🛡️ Insurance (£)", min_value=0.0, 
-                                       value=st.session_state.budget_data.get('insurance_cost', 0.0))
+                                       value=st.session_state.budget_data.get('insurance_cost', 0.0),
+                                       step=5.0, key="insurance_budget_input")
     
     st.markdown('</div>', unsafe_allow_html=True)
     
-    # Update budget data
+    # Update budget data in session state
     st.session_state.budget_data.update({
         'food_budget': food_budget,
         'activities_budget': activities_budget,
@@ -663,9 +617,6 @@ def budget_calculator():
                 title="💰 Budget Breakdown"
             )
             st.plotly_chart(fig, use_container_width=True)
-    
-    # Auto-save
-    auto_save()
 
 def trip_summary():
     """Trip summary component"""
@@ -738,7 +689,7 @@ def trip_summary():
     col1, col2 = st.columns(2)
     
     with col1:
-        if st.button("📁 Download CSV", type="primary"):
+        if st.button("📁 Download CSV", type="primary", key="download_csv_btn"):
             try:
                 df = pd.DataFrame(st.session_state.trip_data)
                 csv = df.to_csv(index=False)
@@ -746,16 +697,17 @@ def trip_summary():
                     label="💾 Download Trip Data",
                     data=csv,
                     file_name=f"{trip_name.replace(' ', '_')}_trip.csv",
-                    mime="text/csv"
+                    mime="text/csv",
+                    key="download_csv_button"
                 )
             except Exception as e:
                 st.error(f"Error creating CSV: {e}")
     
     with col2:
-        if st.button("📋 Generate Text Summary"):
+        if st.button("📋 Generate Text Summary", key="generate_text_btn"):
             try:
                 text_summary = generate_text_itinerary()
-                st.text_area("Copy this itinerary:", value=text_summary, height=200)
+                st.text_area("Copy this itinerary:", value=text_summary, height=200, key="text_summary_area")
             except Exception as e:
                 st.error(f"Error generating summary: {e}")
 
@@ -786,84 +738,174 @@ def show_trip_stats():
 
 def add_new_day():
     """Add a new day to the trip"""
-    try:
-        new_day = {
-            'day': len(st.session_state.trip_data) + 1,
-            'date': '',
-            'location': '',
-            'transport_type': 'Bus',
-            'transport_from': '',
-            'transport_to': '',
-            'transport_time': '',
-            'transport_cost': 0.0,
-            'accommodation_type': 'Hostel',
-            'accommodation_name': '',
-            'accommodation_cost': 0.0,
-            'notes': ''
-        }
-        st.session_state.trip_data.append(new_day)
-        auto_save()
-    except Exception as e:
-        st.error(f"Error adding new day: {e}")
+    new_day = {
+        'day': len(st.session_state.trip_data) + 1,
+        'date': '',
+        'location': '',
+        'transport_type': 'Bus',
+        'transport_from': '',
+        'transport_to': '',
+        'transport_time': '',
+        'transport_cost': 0.0,
+        'accommodation_type': 'Hostel',
+        'accommodation_name': '',
+        'accommodation_cost': 0.0,
+        'notes': ''
+    }
+    st.session_state.trip_data.append(new_day)
 
 def delete_day(index):
     """Delete a day and renumber remaining days"""
-    try:
-        st.session_state.trip_data.pop(index)
-        # Renumber days
-        for j, day in enumerate(st.session_state.trip_data):
-            day['day'] = j + 1
-        auto_save()
-    except Exception as e:
-        st.error(f"Error deleting day: {e}")
+    st.session_state.trip_data.pop(index)
+    # Renumber days
+    for j, day in enumerate(st.session_state.trip_data):
+        day['day'] = j + 1
 
 def copy_day(index):
     """Copy a day with incremented day number"""
-    try:
-        original_day = st.session_state.trip_data[index].copy()
-        original_day['day'] = len(st.session_state.trip_data) + 1
-        original_day['date'] = ''
-        st.session_state.trip_data.append(original_day)
-        auto_save()
-    except Exception as e:
-        st.error(f"Error copying day: {e}")
-
-def update_day_data(index, data):
-    """Update day data in session state"""
-    try:
-        if index < len(st.session_state.trip_data):
-            st.session_state.trip_data[index].update(data)
-            auto_save()
-    except Exception as e:
-        st.error(f"Error updating day data: {e}")
+    original_day = st.session_state.trip_data[index].copy()
+    original_day['day'] = len(st.session_state.trip_data) + 1
+    original_day['date'] = ''
+    st.session_state.trip_data.append(original_day)
 
 def generate_text_itinerary():
     """Generate text version of the itinerary"""
-    try:
-        trip_name = st.session_state.trip_info.get('name', 'My Adventure')
-        text = f"🎒 {trip_name}\n{'='*50}\n\n"
+    trip_name = st.session_state.trip_info.get('name', 'My Adventure')
+    start_date = st.session_state.trip_info.get('start_date', '')
+    end_date = st.session_state.trip_info.get('end_date', '')
+    
+    text = f"🎒 {trip_name}\n{'='*50}\n\n"
+    
+    if start_date and end_date:
+        text += f"📅 {start_date} → {end_date}\n"
+    
+    text += f"🌍 {len(st.session_state.trip_data)} days of adventure\n\n"
+    
+    total_cost = 0
+    for day in st.session_state.trip_data:
+        day_cost = day.get('transport_cost', 0) + day.get('accommodation_cost', 0)
+        total_cost += day_cost
         
-        total_cost = 0
-        for day in st.session_state.trip_data:
-            day_cost = day.get('transport_cost', 0) + day.get('accommodation_cost', 0)
-            total_cost += day_cost
+        text += f"📍 Day {day['day']} - {day.get('location', 'TBD')}\n"
+        text += f"📅 Date: {day.get('date', 'TBD')}\n"
+        text += f"🚌 Transport: {day.get('transport_from', 'TBD')} → {day.get('transport_to', 'TBD')}\n"
+        text += f"   Type: {day.get('transport_type', 'TBD')}\n"
+        
+        if day.get('transport_time'):
+            text += f"   Time: {day['transport_time']}\n"
             
-            text += f"📍 Day {day['day']} - {day.get('location', 'TBD')}\n"
-            text += f"📅 Date: {day.get('date', 'TBD')}\n"
-            text += f"🚌 Transport: {day.get('transport_from', 'TBD')} → {day.get('transport_to', 'TBD')}\n"
-            text += f"🏨 Accommodation: {day.get('accommodation_type', 'TBD')}\n"
-            if day.get('notes'):
-                text += f"📝 Notes: {day['notes']}\n"
-            text += f"💰 Cost: £{day_cost:.2f}\n"
-            text += "-" * 50 + "\n\n"
+        text += f"🏨 Accommodation: {day.get('accommodation_type', 'TBD')}\n"
         
-        text += f"💰 Total Trip Cost: £{total_cost:.2f}\n"
-        text += f"🎒 Total Days: {len(st.session_state.trip_data)}\n"
-        text += "🌟 Have an amazing adventure!"
+        if day.get('accommodation_name'):
+            text += f"   Place: {day['accommodation_name']}\n"
         
-        return text
-    except Exception as e:
-        return f"Error generating itinerary: {e}"
+        if day.get('notes'):
+            text += f"📝 Notes: {day['notes']}\n"
+            
+        text += f"💰 Daily Cost: £{day_cost:.2f}\n"
+        text += "-" * 50 + "\n\n"
+    
+    text += f"💰 Total Trip Cost: £{total_cost:.2f}\n"
+    text += f"🎒 Total Days: {len(st.session_state.trip_data)}\n"
+    
+    if len(st.session_state.trip_data) > 0:
+        avg_daily = total_cost / len(st.session_state.trip_data)
+        text += f"📊 Average Daily Cost: £{avg_daily:.2f}\n"
+    
+    text += "\n🌟 Have an amazing adventure! Safe travels! 🎒"
+    
+    return text
+
+def analytics_dashboard():
+    """Analytics dashboard for trip insights"""
+    st.markdown('<h2 class="section-header">📊 Trip Analytics</h2>', unsafe_allow_html=True)
+    
+    if not st.session_state.trip_data:
+        st.info("No data to analyze yet! Add your trip details first.")
+        return
+    
+    # Trip completion analysis
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.subheader("🎯 Trip Completion Status")
+    
+    completed_days = sum(1 for day in st.session_state.trip_data if calculate_day_completion(day) >= 0.8)
+    total_days = len(st.session_state.trip_data)
+    completion_rate = completed_days / total_days if total_days > 0 else 0
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("🏁 Completed Days", f"{completed_days}/{total_days}")
+    with col2:
+        st.metric("📈 Completion Rate", f"{completion_rate:.1%}")
+    with col3:
+        missing_locations = sum(1 for day in st.session_state.trip_data if not day.get('location'))
+        st.metric("📍 Missing Locations", missing_locations)
+    with col4:
+        missing_transport = sum(1 for day in st.session_state.trip_data if not day.get('transport_from'))
+        st.metric("🚌 Missing Transport", missing_transport)
+    
+    # Progress bar
+    st.progress(completion_rate, text=f"Overall Trip Planning: {completion_rate:.1%}")
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Transport and accommodation analysis
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.subheader("🚌 Transport Analysis")
+        
+        transport_stats = {}
+        for day in st.session_state.trip_data:
+            transport = day.get('transport_type', 'Unknown')
+            transport_stats[transport] = transport_stats.get(transport, 0) + 1
+        
+        if transport_stats:
+            fig = px.bar(
+                x=list(transport_stats.keys()),
+                y=list(transport_stats.values()),
+                title="Transport Usage",
+                labels={'x': 'Transport Type', 'y': 'Number of Days'}
+            )
+            fig.update_layout(showlegend=False)
+            st.plotly_chart(fig, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.subheader("🏨 Accommodation Analysis")
+        
+        accommodation_stats = {}
+        for day in st.session_state.trip_data:
+            accommodation = day.get('accommodation_type', 'Unknown')
+            accommodation_stats[accommodation] = accommodation_stats.get(accommodation, 0) + 1
+        
+        if accommodation_stats:
+            fig = px.pie(
+                values=list(accommodation_stats.values()),
+                names=list(accommodation_stats.keys()),
+                title="Accommodation Distribution"
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Daily costs chart
+    if st.session_state.trip_data:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.subheader("💰 Daily Expenses")
+        
+        days = [day['day'] for day in st.session_state.trip_data]
+        costs = [day.get('transport_cost', 0) + day.get('accommodation_cost', 0) for day in st.session_state.trip_data]
+        
+        fig = px.bar(
+            x=days,
+            y=costs,
+            title="Daily Cost Breakdown",
+            labels={'x': 'Day', 'y': 'Cost (£)'}
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
 # ============================================================================
 # MAIN APPLICATION
@@ -871,57 +913,62 @@ def generate_text_itinerary():
 
 def main():
     """Main application function"""
-    try:
-        # Initialize session state
-        init_session_state()
-        
-        # Load CSS
-        load_css()
-        
-        # Header
-        st.markdown("""
-        <div class="app-header">
-            <h1>🎒 Adventure Planner</h1>
-            <p>Plan your perfect backpacking journey</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # Quick stats if trip data exists
-        if st.session_state.trip_data:
-            show_trip_stats()
-        
-        # Navigation tabs
-        tab1, tab2, tab3, tab4 = st.tabs([
-            "🌍 Trip Overview", 
-            "📅 Day Planning", 
-            "💰 Budget", 
-            "📋 Summary"
-        ])
-        
-        with tab1:
-            trip_overview()
-        
-        with tab2:
-            day_by_day_planning()
-        
-        with tab3:
-            budget_calculator()
-        
-        with tab4:
-            trip_summary()
-        
-        # Footer
-        st.markdown("""
-        <div style="text-align: center; padding: 2rem; margin-top: 3rem; 
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                    color: white; border-radius: 12px;">
-            <p>🎒 Made with ❤️ for adventurers | Safe travels! 🌟</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-    except Exception as e:
-        st.error(f"Application error: {e}")
-        st.info("Please refresh the page to restart the application.")
+    # Initialize session state
+    init_session_state()
+    
+    # Load CSS
+    load_css()
+    
+    # Session info banner
+    session_info_banner()
+    
+    # Header
+    st.markdown("""
+    <div class="app-header">
+        <h1>🎒 Adventure Planner</h1>
+        <p>Plan your perfect backpacking journey - your data stays private!</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Quick stats if trip data exists
+    if st.session_state.trip_data:
+        show_trip_stats()
+    
+    # Navigation tabs
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "🌍 Trip Overview", 
+        "📅 Day Planning", 
+        "💰 Budget", 
+        "📊 Analytics",
+        "📋 Summary"
+    ])
+    
+    with tab1:
+        trip_overview()
+    
+    with tab2:
+        day_by_day_planning()
+    
+    with tab3:
+        budget_calculator()
+    
+    with tab4:
+        analytics_dashboard()
+    
+    with tab5:
+        trip_summary()
+    
+    # Footer with session reminder
+    st.markdown("""
+    <div style="text-align: center; padding: 2rem; margin-top: 3rem; 
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                color: white; border-radius: 12px;">
+        <p>🎒 Made with ❤️ for adventurers | Your data is session-only and private! 🌟</p>
+        <p style="font-size: 0.9rem; opacity: 0.8;">
+            💡 Tip: Export your trip data before closing the browser to save your plans permanently
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
