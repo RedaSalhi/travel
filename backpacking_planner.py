@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+from data_manager import auto_save, initialize_from_saved_data
 
 # Page configuration
 st.set_page_config(
@@ -430,32 +431,41 @@ def load_css():
 
 def init_session_state():
     """Initialize session state with proper structure"""
-    if 'trip_data' not in st.session_state:
-        st.session_state.trip_data = []
-    
-    if 'budget_data' not in st.session_state:
-        st.session_state.budget_data = {
-            'total_budget': 1000.0,
-            'food_budget': 0.0,
-            'activities_budget': 0.0,
-            'shopping_budget': 0.0,
-            'misc_costs': 0.0,
-            'emergency_budget': 0.0,
-            'insurance_cost': 0.0,
-            'currency': 'GBP'
-        }
-    
-    if 'trip_info' not in st.session_state:
-        st.session_state.trip_info = {
-            'name': '',
-            'start_date': None,
-            'end_date': None,
-            'destinations': '',
-            'travel_style': '🎒 Budget Backpacker (£25-40/day)',
-            'group_size': 1,
-            'transport_preference': '🚌 Bus',
-            'accommodation_preference': '🏠 Hostels'
-        }
+    # Try to load saved data first
+    saved_data = initialize_from_saved_data()
+
+    if saved_data:
+        st.session_state.trip_data = saved_data['trip_data']
+        st.session_state.budget_data = saved_data['budget_data']
+        st.session_state.trip_info = saved_data['trip_info']
+    else:
+        # Initialize with defaults if no saved data
+        if 'trip_data' not in st.session_state:
+            st.session_state.trip_data = []
+
+        if 'budget_data' not in st.session_state:
+            st.session_state.budget_data = {
+                'total_budget': 1000.0,
+                'food_budget': 0.0,
+                'activities_budget': 0.0,
+                'shopping_budget': 0.0,
+                'misc_costs': 0.0,
+                'emergency_budget': 0.0,
+                'insurance_cost': 0.0,
+                'currency': 'GBP'
+            }
+
+        if 'trip_info' not in st.session_state:
+            st.session_state.trip_info = {
+                'name': '',
+                'start_date': None,
+                'end_date': None,
+                'destinations': '',
+                'travel_style': '🎒 Budget Backpacker (£25-40/day)',
+                'group_size': 1,
+                'transport_preference': '🚌 Bus',
+                'accommodation_preference': '🏠 Hostels'
+            }
 
 # ============================================================================
 # COMPONENT FUNCTIONS (Fixed and integrated)
@@ -579,9 +589,11 @@ def trip_overview():
                 'transport_preference': transport_preference,
                 'accommodation_preference': accommodation_preference
             })
-            
+
             st.session_state.budget_data['total_budget'] = total_budget
-            
+
+            auto_save(st.session_state.trip_data, st.session_state.budget_data, st.session_state.trip_info)
+
             st.success("✅ Trip overview saved! Ready to plan your adventure!")
             
             # Auto-suggest days and budget
@@ -843,6 +855,7 @@ def budget_calculator():
         'emergency_budget': emergency_budget,
         'insurance_cost': insurance_cost
     })
+    auto_save(st.session_state.trip_data, st.session_state.budget_data, st.session_state.trip_info)
     
     # Calculate totals
     additional_costs = food_budget + activities_budget + shopping_budget + emergency_budget + insurance_cost + misc_costs
@@ -1288,6 +1301,7 @@ def update_day_data(index, data):
     """Update day data in session state"""
     if index < len(st.session_state.trip_data):
         st.session_state.trip_data[index].update(data)
+        auto_save(st.session_state.trip_data, st.session_state.budget_data, st.session_state.trip_info)
 
 def get_transport_index(transport_type):
     """Get index for transport type selectbox"""
